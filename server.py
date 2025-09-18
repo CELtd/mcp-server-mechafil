@@ -15,7 +15,7 @@ mcp = FastMCP("mechafil-server")
 
 
 @mcp.tool()
-def get_historical_data_full() -> str:
+def get_historical_data() -> str:
     """Get complete historical data from mechafil-server including smoothed metrics, 
     historical arrays, and offline data.
     
@@ -25,12 +25,12 @@ def get_historical_data_full() -> str:
     """
     try:
         response = requests.get(
-            f"{MECHAFIL_SERVER_URL}/historical-data/full",
+            f"{MECHAFIL_SERVER_URL}/historical-data",
             headers={"Accept": "application/json"},
             timeout=30
         )
         response.raise_for_status()
-        return json.dumps(response.json(), indent=2)
+        return json.dumps(response.json())
     
     except requests.exceptions.ConnectionError:
         return json.dumps({
@@ -99,7 +99,7 @@ def simulate(
             timeout=60
         )
         response.raise_for_status()
-        return json.dumps(response.json(), indent=2)
+        return json.dumps(response.json())
     
     except requests.exceptions.ConnectionError:
         return json.dumps({
