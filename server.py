@@ -54,6 +54,7 @@ def get_historical_data() -> str:
         })
 
 
+### TODO: change the output, not a string but a structured result. Use a dictionary for output, so that the key can change depending on the input
 @mcp.tool()
 def simulate(
     rbp: Optional[Union[float, List[float]]] = None,
