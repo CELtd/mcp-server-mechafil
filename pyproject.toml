@@ -5,6 +5,7 @@ description = "MCP server for mechafil-server API endpoints"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastmcp>=2.12.3",
     "mcp[cli]>=1.3.0",
     "requests>=2.32.3",
 ]
