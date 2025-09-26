@@ -23,7 +23,7 @@ class SimulationInputs(BaseModel):
             description="""Raw Byte Power onboarding rate in EiB/day (Exbibytes per day).
             
             MEANING: Daily rate of new physical storage capacity added to the Filecoin network.
-            DEFAULT: ~3.4 EiB/day (derived from recent network data)
+            DEFAULT: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
             
             EXAMPLES:
             - 2.0 = Conservative growth scenario
@@ -41,7 +41,7 @@ class SimulationInputs(BaseModel):
             description="""Sector renewal rate as fraction 0.0-1.0 (0%=all sectors expire, 100%=all renewed).
             
             MEANING: When storage sectors reach end-of-life, what fraction get renewed vs. leaving network.
-            DEFAULT: ~0.83 (83% renewal rate from historical data)
+            DEFAULT: Derived from recent network data and its value is reported in the explaination of the results of the simulation. 
             
             EXAMPLES:
             - 0.9 = Very high retention, stable network
@@ -59,7 +59,7 @@ class SimulationInputs(BaseModel):
             description="""FIL+ verified deals rate as fraction 0.0-1.0 (0%=no FIL+, 100%=all verified).
             
             MEANING: Fraction of new storage deals that qualify for FIL+ verified data program.
-            DEFAULT: ~0.86 (86% FIL+ adoption from recent data)
+            DEFAULT: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
             
             EXAMPLES:
             - 0.95 = Very high verified data adoption
@@ -198,21 +198,21 @@ def simulate(sim: SimulationInputs) -> dict:
     rbp (Raw Byte Power): 
         - Units: EiB/day (Exbibytes per day)
         - Meaning: Rate of new storage capacity added to network daily
-        - Default: ~3.4 EiB/day (derived from recent historical data)
+        - Default: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
         - Example: 5.0 = aggressive growth, 2.0 = slower growth
         - Can be: Single value (constant) or array (time-varying scenario)
     
     rr (Renewal Rate):
         - Units: Ratio 0-1 (0=0%, 1=100%)  
         - Meaning: Fraction of expiring sectors that get renewed vs. leaving network
-        - Default: ~0.83 (83% renewal rate from historical data)
+        - Default: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
         - Example: 0.9 = very high retention, 0.7 = moderate churn
         - Impact: Higher renewal = more stable network, lower new onboarding needs
     
     fpr (FIL+ Rate):
         - Units: Ratio 0-1 (0=0%, 1=100%)
         - Meaning: Fraction of new storage that qualifies for FIL+ verified deals
-        - Default: ~0.86 (86% FIL+ adoption from recent data)
+        - Default: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
         - Impact: FIL+ deals get 10x quality multiplier, boosting rewards significantly
         - Example: 0.95 = very high verified data, 0.5 = mixed use case
     
@@ -263,6 +263,7 @@ def simulate(sim: SimulationInputs) -> dict:
     Returns dictionary with structure:
     {
         "1y_sector_roi": [0.187, 0.189, 0.191, ...],  // Weekly sampled values
+        "Explaination" : "Results of a Filecoin simulation with the following input values:  Raw byte power (rbp) onboarded: 2.36,  Renewal rate (rr): 0.82, Filplus deals rate (fpr): 0.74"
     }
     
     The output array represents time series data, with each value corresponding to a week
@@ -285,7 +286,7 @@ def simulate(sim: SimulationInputs) -> dict:
         sim: SimulationInputs containing forecast parameters (all optional)
         
     Returns:
-        dict: Simulation results with specified output metric and explanation
+        dict: Simulation results with specified output metric and a detailed explaination of the parameters that are used during this simulation. IMPORTANT: read always the explaination
     """
     # Build request payload, excluding None values
     payload = {}
@@ -331,10 +332,10 @@ def simulate(sim: SimulationInputs) -> dict:
 
     # Build explanation string with actual values
     output_explanation_text = (
-        "Results of a Filecoin simulation with the following input values:\n"
-        f"- Raw byte power (rbp) onboarded: {input_variables.get('raw_byte_power')}\n"
-        f"- Renewal rate (rr): {input_variables.get('renewal_rate')}\n"
-        f"- Filplus deals rate (fpr): {input_variables.get('filplus_rate')}"
+        "Results of a Filecoin simulation with the following input values: " +
+        f"Raw byte power (rbp) onboarded: {input_variables.get('raw_byte_power')}, " + 
+        f"Renewal rate (rr): {input_variables.get('renewal_rate')}, " + 
+        f"Filplus deals rate (fpr): {input_variables.get('filplus_rate')}"
     )
 
     return {
