@@ -210,23 +210,73 @@ All parameters are **optional** with intelligent defaults derived from recent ne
 
 **Available Metrics Categories**:
 
-*Investment Metrics*:
-- `"1y_sector_roi"`: Annual ROI for 32GiB sectors (0.15 = 15% return)
-- `"1y_return_per_sector"`: Annual FIL earnings per 32GiB sector
-- `"day_rewards_per_sector"`: Daily FIL earnings per sector
-- `"day_pledge_per_QAP"`: Collateral required per PiB of storage
+*Storage Power Outputs - Raw Byte Power (RBP) Metrics*:
+- `"rb_total_power_eib"`: Total raw byte power (EiB) over time
+- `"rb_day_onboarded_power_pib"`: Daily new storage capacity (PiB)
+- `"rb_day_renewed_power_pib"`: Daily renewed storage capacity (PiB)
+- `"rb_sched_expire_power_pib"`: Daily scheduled storage expirations (PiB)
 
-*Supply Metrics*:
-- `"available_supply"`: FIL tokens available for trading (excludes locked)
-- `"circ_supply"`: Total circulating FIL supply (includes locked tokens)
+*Storage Power Outputs - Quality Adjusted Power (QAP) Metrics*:
+- `"qa_total_power_eib"`: Total quality-adjusted power (EiB) - used for rewards
+- `"qa_day_onboarded_power_pib"`: Daily new QAP including FIL+ multipliers (PiB)
+- `"qa_day_renewed_power_pib"`: Daily renewed QAP (PiB)
+- `"qa_sched_expire_power_pib"`: Daily scheduled QAP expirations (PiB)
+
+*Token Minting and Rewards - Daily Rewards*:
+- `"day_network_reward"`: Daily FIL tokens minted and distributed
+
+*Token Minting and Rewards - Cumulative Rewards*:
+- `"cum_network_reward"`: Total FIL minted since network launch
+- `"cum_simple_reward"`: Cumulative time-based minting (30% of allocation)
+- `"cum_baseline_reward"`: Cumulative growth-based minting (70% of allocation)
+
+*Token Minting and Rewards - Baseline Mechanics*:
+- `"network_baseline_EIB"`: Target storage capacity for baseline rewards (EiB)
+- `"capped_power_EIB"`: Power used for baseline calculations (EiB)
+- `"cum_capped_power_EIB"`: Cumulative capped power since launch (EiB)
+- `"network_time"`: Effective network age based on growth (days)
+
+*Token Supply and Economics - Supply Metrics*:
+- `"circ_supply"`: Total FIL tokens in circulation
+- `"available_supply"`: FIL available for transactions (circulating - locked)
+
+*Token Supply and Economics - Locked Token Metrics*:
 - `"network_locked"`: Total FIL locked as collateral
+- `"network_locked_pledge"`: FIL locked as initial pledge
+- `"network_locked_reward"`: FIL locked from block reward vesting
+- `"day_locked_pledge"`: Daily pledge locking for new storage
+- `"day_renewed_pledge"`: Daily pledge adjustments for renewals
 
-*Network Metrics*:
-- `"network_QAP_EIB"`: Total quality-adjusted storage power (EiB)
-- `"network_RBP_EIB"`: Total raw storage capacity (EiB)
-- `"day_network_reward"`: Daily block rewards to all providers (FIL/day)
+*Token Supply and Economics - Gas and Burning*:
+- `"network_gas_burn"`: Cumulative FIL burned through gas fees
 
-<span style="color: red;">**[NEEDS RESEARCH]** - Complete list of all 40+ available metrics with descriptions and typical value ranges</span>
+*Vesting Outputs*:
+- `"total_day_vest"`: Daily FIL token vesting amounts
+- `"total_vest"`: Cumulative vested FIL since network launch
+- `"disbursed_reserve"`: Mining reserve disbursements (~17.07M FIL constant)
+
+*Economic Derived Metrics - Storage Provider Economics*:
+- `"day_pledge_per_QAP"`: Daily pledge requirement per PiB QAP (FIL/PiB)
+- `"day_rewards_per_sector"`: Daily revenue per 32GiB sector (FIL/sector)
+- `"1y_return_per_sector"`: Rolling 12-month returns per sector (FIL/sector)
+- `"1y_sector_roi"`: Rolling 12-month ROI (returns/pledge ratio)
+
+*Economic Derived Metrics - Network Operations*:
+- `"full_renewal_rate"`: Complete renewal rate time series
+
+*Additional Vesting Components*:
+- `"six_year_vest_pl"`: Protocol Lab vesting (15% allocation)
+- `"six_year_vest_foundation"`: Foundation vesting (5% allocation)
+- Various investor vesting schedules with multiple timeframes (0 days to 6 years)
+
+**Legacy/Alternative Field Names** (for compatibility):
+- `"network_RBP_EIB"`: Same as `"rb_total_power_eib"`
+- `"network_QAP_EIB"`: Same as `"qa_total_power_eib"`
+
+**Data Types and Dimensions**:
+- **Time Series Fields**: Most fields have dimensions `[total_simulation_length]` where `total_simulation_length = len(historical_data) + forecast_length_days`
+- **ROI Fields**: `"1y_sector_roi"` and `"1y_return_per_sector"` have dimensions `[total_simulation_length - 364]` due to 365-day rolling calculations
+- **Data Types**: All numeric fields are float32 for JAX compatibility
 
 #### **Output Structure**
 
