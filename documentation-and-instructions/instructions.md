@@ -9,8 +9,6 @@ To make predictions, you have access to Mecahfil, a digital twin of the Filecoin
 
 
 # BACKGROUND INFORMATION
----
-
 ## What is Filecoin
 
 Filecoin is a decentralized storage network that transforms cloud storage into an algorithmic market. It creates a competitive marketplace where storage providers earn rewards by providing reliable storage capacity to the network, while clients pay to store and retrieve their data.
@@ -308,38 +306,6 @@ All parameters are **optional** with intelligent defaults derived from recent ne
 
 #### **Usage Examples**
 
-**Basic Usage (All Defaults)**:
-```python
-simulate(SimulationInputs())
-# Returns 10-year ROI forecast with recent network parameters
-```
-
-**Focused 1-Year Analysis**:
-```python
-simulate(SimulationInputs(
-    forecast_length_days=365,
-    requested_metric="1y_sector_roi"
-))
-```
-
-**Custom Growth Scenario**:
-```python
-simulate(SimulationInputs(
-    rbp=6.0,                    # High onboarding
-    fpr=0.95,                   # Very high FIL+ adoption
-    forecast_length_days=730,   # 2-year forecast
-    requested_metric="available_supply"
-))
-```
-
-**Time-Varying Parameters**:
-```python
-simulate(SimulationInputs(
-    rbp=[3.0, 4.0, 5.0, 4.0, 3.0],  # Growth spike then decline
-    rr=[0.8, 0.82, 0.85, 0.87, 0.9], # Improving retention
-    forecast_length_days=5,           # Must match array length
-    requested_metric="network_QAP_EIB"
-))
 ```
 
 ### Tool 2: `get_historical_data` - Historical Network Data
@@ -466,18 +432,7 @@ The function returns error information in JSON format if issues occur:
 
 ---
 
-## Integration Notes
-
-### Environment Configuration
-- **`MECHAFIL_SERVER_URL`**: Environment variable to specify the MechaFil server URL (default: `http://localhost:8000`)
-- **Dependencies**: Requires running MechaFil server instance for all functionality
-
-### Tool Relationship
-- **`get_historical_data`**: Provides baseline parameters and context for simulation setup
-- **`simulate`**: Uses historical data as defaults when parameters not explicitly specified
-- **Workflow**: Typically call `get_historical_data` first to understand current network state, then run `simulate` with appropriate parameters
-
-### Best Practices
+## Best Practices
 1. **Always set `forecast_length_days`** based on user's time horizon requirements
 2. **Use `requested_metric`** to focus analysis on specific economic indicators  
 3. **Call `get_historical_data`** to understand current network baseline before running forecasts
