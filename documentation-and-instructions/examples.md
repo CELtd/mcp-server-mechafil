@@ -1,5 +1,5 @@
 # MCP MechaFil Tool Usage Examples
-
+When you see ... in the examples, it means ‘fill in the analysis based on the tool output and conversation context.
 ## Current State Queries
 
 ### Example 1: FIL+ Adoption Rate
@@ -120,12 +120,12 @@ PROMPT: "How will network capacity grow over the next 6 months?"
 
 TOOL: simulate({
   "forecast_length_days": 180,
-  "requested_metric": "qa_total_power_eib"
+  "requested_metric": "network_QAP_EIB"
 })
 
 OUTPUT:
 {
-  "qa_total_power_eib": [35.2, 35.8, 36.4, 37.0, ..., 42.1],
+  "network_QAP_EIB": [35.2, 35.8, 36.4, 37.0, ..., 42.1],
   "Explanation": "Results of a Filecoin simulation with the following input values: Raw byte power (rbp) onboarded: 3.38, Renewal rate (rr): 0.83, Filplus deals rate (fpr): 0.86"
 }
 
@@ -229,9 +229,9 @@ STEP 4 - Run low FIL+ scenario for network power:
 TOOL: simulate({
   "fpr": 0.5,
   "forecast_length_days": 365,
-  "requested_metric": "qa_total_power_eib"
+  "requested_metric": "network_QAP_EIB"
 })
-OUTPUT: { "qa_total_power_eib": [35.2, ..., 32.1], "Explanation": "..." }
+OUTPUT: { "network_QAP_EIB": [35.2, ..., 32.1], "Explanation": "..." }
 
 STEP 5 - Run low FIL+ scenario for pledge requirements:
 TOOL: simulate({
@@ -242,7 +242,7 @@ TOOL: simulate({
 OUTPUT: { "day_pledge_per_QAP": [0.25, ..., 0.18], "Explanation": "..." }
 
 RESPONSE:
-"Reducing FIL+ adoption from 86% to 50% would have significant network-wide effects:
+"...
 
 1. **Provider ROI**: ...
 
@@ -284,17 +284,17 @@ STEP 4 - Get network capacity for high growth:
 TOOL: simulate({
   "rbp": 5.07,
   "forecast_length_days": 365,
-  "requested_metric": "qa_total_power_eib"
+  "requested_metric": "network_QAP_EIB"
 })
-OUTPUT: { "qa_total_power_eib": [35.2, ..., 52.8], "Explanation": "..." }
+OUTPUT: { "network_QAP_EIB": [35.2, ..., 52.8], "Explanation": "..." }
 
 STEP 5 - Get network capacity for low growth:
 TOOL: simulate({
   "rbp": 1.69,
   "forecast_length_days": 365,
-  "requested_metric": "qa_total_power_eib"
+  "requested_metric": "network_QAP_EIB"
 })
-OUTPUT: { "qa_total_power_eib": [35.2, ..., 38.4], "Explanation": "..." }
+OUTPUT: { "network_QAP_EIB": [35.2, ..., 38.4], "Explanation": "..." }
 
 RESPONSE:
 "Comparison of high growth vs low growth scenarios (current: 3.38 EiB/day):
@@ -561,7 +561,7 @@ ACTION: Determine forecast_length_days = 365
 STEP 2 - Run simulation for network power:
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "qa_total_power_eib"
+  "requested_metric": "network_QAP_EIB"
 })
 
 STEP 3 - Run simulation for circulating supply:
