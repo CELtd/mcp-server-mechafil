@@ -276,7 +276,6 @@ def simulate(sim: SimulationInputs) -> dict:
     INTERPRETATION GUIDANCE:
     - ROI values: 0.15 = 15% annual return, 0.25 = 25% return
     - Supply trends: Increasing = inflationary, decreasing = deflationary pressure
-    - Power growth: Exponential = unsustainable, linear = steady state
     - Reward patterns: Declining over time due to halvening-like economics
     
     
