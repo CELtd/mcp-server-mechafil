@@ -285,17 +285,34 @@ All parameters are **optional** with intelligent defaults derived from recent ne
 **Structure**:
 ```python
 {
-    "metric_name": [value1, value2, value3, ...],  # Weekly-sampled time series
-    "Explanation": "Results of a Filecoin simulation with the following input values: Raw byte power (rbp) onboarded: X.XX, Renewal rate (rr): X.XX, Filplus deals rate (fpr): X.XX"
+    "input": {
+        "current date": "2025-01-01",
+        "forecast_length_days": 365,
+        "raw_byte_power": 3.38,
+        "renewal_rate": 0.83,
+        "filplus_rate": 0.86
+    },
+    "simulation_output": {
+        "1y_sector_roi": [0.18, 0.17, 0.16, ...],  # Monday-sampled time series
+        "available_supply": [580250000.12, 582100000.45, ...],
+        // ... other metrics (if requested_metric not specified or output filtering used)
+    }
 }
 ```
 
 **Output Details**:
-- **`metric_name`**: The key matches the `requested_metric` parameter (default: `"1y_sector_roi"`)
-- **Time Series Array**: List of `float` values representing the metric over time
-- **Sampling**: Values are sampled at weekly intervals (every 7 days)
-- **Array Length**: `forecast_length_days / 7` (approximately, based on Monday sampling)
-- **`"Explanation"`**: String describing the actual parameter values used in the simulation (derived from defaults if not specified)
+- **`input`**: Metadata dictionary containing:
+  - `"current date"`: The simulation start date (YYYY-MM-DD format)
+  - `"forecast_length_days"`: Length of forecast period used
+  - `"raw_byte_power"`: Actual RBP value used (from parameter or default)
+  - `"renewal_rate"`: Actual renewal rate used (from parameter or default)
+  - `"filplus_rate"`: Actual FIL+ rate used (from parameter or default)
+- **`simulation_output`**: Dictionary mapping metric names to time series arrays
+  - If `requested_metric` is specified: contains only that metric
+  - If `requested_metric` is None: contains all available metrics
+  - **Time Series Arrays**: List of `float` values (Monday-sampled, weekly intervals)
+  - **Array Length**: ~`forecast_length_days / 7` (based on Monday sampling)
+  - **Values**: Rounded to 2 decimal places
 
 **Value Interpretation Examples**:
 - **ROI values**: `0.15` = 15% annual return, `0.25` = 25% annual return
@@ -356,48 +373,53 @@ Retrieves real-world historical data from the Filecoin blockchain network, spann
 **Structure**:
 ```json
 {
-    "message": "Historical data reduced to Mondays only (no averaging)",
-    "smoothed_metrics": {
-        "raw_byte_power": 3.38,      // EiB/day recent onboarding rate
-        "renewal_rate": 0.83,        // Recent sector renewal rate (83%)
-        "filplus_rate": 0.86         // Recent FIL+ adoption rate (86%)
-    },
-    "monday_arrays": {
-        "raw_byte_power": [2.1, 2.4, 2.8, ...],     // Weekly historical values
+    "data": {
+        // 30-day averaged metrics (scalars)
+        "raw_byte_power_averaged_over_previous_30days": 3.38,
+        "renewal_rate_averaged_over_previous_30days": 0.83,
+        "filplus_rate_averaged_over_previous_30days": 0.86,
+
+        // Historical arrays (Monday values only)
+        "raw_byte_power": [2.1, 2.4, 2.8, ...],
         "renewal_rate": [0.75, 0.78, 0.81, ...],
-        "filplus_rate": [0.82, 0.84, 0.85, ...]
-    },
-    "offline_data_mondays": {
-        "rb_power_zero": 1234.56,                    // Initial RBP (PiB)
-        "qa_power_zero": 2345.67,                    // Initial QAP (PiB)
-        "circ_supply_zero": 123456789.12,            // Initial circulating supply (FIL)
-        "locked_fil_zero": 98765432.10,              // Initial locked FIL
-        // ... extensive initialization data for simulations
+        "filplus_rate": [0.82, 0.84, 0.85, ...],
+
+        // Offline model data (Monday values)
+        "rb_power_zero": 1234.56,
+        "qa_power_zero": 2345.67,
+        "circ_supply_zero": 123456789.12,
+        "locked_fil_zero": 98765432.10,
+        "historical_raw_power_eib": [12.5, 13.1, ...],
+        "historical_qa_power_eib": [45.2, 46.1, ...],
+        "rb_known_scheduled_expire_vec": [...],
+        "qa_known_scheduled_expire_vec": [...],
+        "known_scheduled_pledge_release_full_vec": [...],
+        // ... all other historical data fields
     }
 }
 ```
 
-#### **Output Sections Explained**
+#### **Output Structure Explained**
 
-##### **1. Smoothed Metrics**
-30-day median values of recent network data, useful as default parameters for simulations:
+All data is returned in a single flat `data` object containing:
 
-- **`raw_byte_power`**: Recent network storage onboarding rate (EiB/day)
-- **`renewal_rate`**: Recent sector renewal rate (0-1, where 1=100% renewed)  
-- **`filplus_rate`**: Recent FIL+ adoption rate (0-1, where 1=100% FIL+ deals)
+##### **1. 30-Day Averaged Metrics**
+Recent network metrics (30-day median), useful as default parameters for simulations:
 
-<span style="color: red;">**[NEEDS RESEARCH]** - Exact calculation methodology for smoothed metrics, typical value ranges</span>
+- **`raw_byte_power_averaged_over_previous_30days`**: Recent onboarding rate (EiB/day)
+- **`renewal_rate_averaged_over_previous_30days`**: Recent renewal rate (0-1, where 1=100%)
+- **`filplus_rate_averaged_over_previous_30days`**: Recent FIL+ adoption (0-1, where 1=100%)
 
-##### **2. Monday Arrays**
-Historical time series data downsampled to weekly intervals (Mondays only) for efficient data transfer:
+##### **2. Historical Time Series Arrays**
+All arrays are downsampled to Monday values only for efficient data transfer:
 
-- **Array Length**: <span style="color: red;">**[NEEDS RESEARCH]** - Number of weeks since mainnet launch</span>
+- **Array Length**: ~214 weeks for ~4 years of data (from start_date to current_date)
 - **Sampling Method**: Values correspond to Monday dates only
-- **Data Coverage**: From Filecoin mainnet launch (~October 2020) to most recent data
+- **Data Coverage**: From simulation start_date (typically 2025-01-01) to most recent data
 - **Use Cases**: Trend analysis, historical pattern identification, baseline comparison
 
-##### **3. Offline Data**
-Comprehensive simulation initialization parameters and historical context:
+##### **3. Offline Model Data**
+Comprehensive simulation initialization parameters and historical context (also Monday-downsampled for arrays):
 
 **Power Statistics**:
 - **`rb_power_zero`**: Initial raw byte power when simulation starts (PiB)
@@ -428,14 +450,14 @@ Comprehensive simulation initialization parameters and historical context:
 ```python
 historical_data = get_historical_data()
 import json
-data = json.loads(historical_data)
+result = json.loads(historical_data)
 
-# Access recent network parameters
-recent_onboarding = data["smoothed_metrics"]["raw_byte_power"]  # e.g., 3.38 EiB/day
-recent_renewals = data["smoothed_metrics"]["renewal_rate"]      # e.g., 0.83 (83%)
+# Access recent network parameters (30-day averages)
+recent_onboarding = result["data"]["raw_byte_power_averaged_over_previous_30days"]  # e.g., 3.38 EiB/day
+recent_renewals = result["data"]["renewal_rate_averaged_over_previous_30days"]      # e.g., 0.83 (83%)
 
-# Access historical trends
-rbp_history = data["monday_arrays"]["raw_byte_power"]  # Weekly time series
+# Access historical trends (Monday arrays)
+rbp_history = result["data"]["raw_byte_power"]  # Weekly time series
 ```
 
 **Error Handling**:

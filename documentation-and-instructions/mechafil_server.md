@@ -4,6 +4,16 @@
 
 MechaFil Server is a production-ready FastAPI web service that provides HTTP endpoints for running Filecoin economic forecasts. It wraps the high-performance **mechafil-jax** simulation engine, making sophisticated economic modeling accessible through simple web requests.
 
+### Key Features
+
+- **Unified API Structure**: All endpoints now return standardized response formats using dataclass containers
+- **Monday Downsampling**: Results automatically downsampled to weekly values for efficient data transfer
+- **Field Filtering**: Request only specific metrics using the `output` parameter
+- **Consistent Response Format**:
+  - Simulations: `{"input": {...}, "simulation_output": {...}}`
+  - Historical data: `{"data": {...}}`
+- **Simplified Endpoints**: Single `/simulate` endpoint (removed `/simulate/full`), single `/historical-data` endpoint
+
 ## Architecture
 
 ```
@@ -12,15 +22,20 @@ MechaFil Server is a production-ready FastAPI web service that provides HTTP end
 ├─────────────────────────────────────────────────────────────┤
 │  FastAPI Web Layer                                         │
 │  ├── /health              - Health checks                  │
-│  ├── /historical-data     - Data summaries                │
-│  ├── /historical-data/full - Complete historical data     │
-│  ├── /simulate            - Weekly averaged results        │
-│  └── /simulate/full       - Full detailed results          │
+│  ├── /                    - Documentation redirect         │
+│  ├── /historical-data     - Monday-downsampled data        │
+│  └── /simulate            - Monday-downsampled forecasts   │
 ├─────────────────────────────────────────────────────────────┤
-│  Data Processing Layer                                      │
+│  Results Processing Layer (results.py)                      │
+│  ├── SimulationResults    - Wraps simulation outputs       │
+│  ├── FetchDataResults     - Wraps historical data          │
+│  ├── Monday downsampling  - Weekly data reduction          │
+│  └── Field filtering      - Output selection               │
+├─────────────────────────────────────────────────────────────┤
+│  Data Processing Layer (data.py)                            │
 │  ├── Historical data fetching and caching                  │
 │  ├── Parameter validation and transformation               │
-│  ├── Result filtering and downsampling                     │
+│  ├── Data trimming for simulation periods                  │
 │  └── Background data refresh scheduling                    │
 ├─────────────────────────────────────────────────────────────┤
 │  MechaFil-JAX Integration                                   │
@@ -33,6 +48,63 @@ MechaFil Server is a production-ready FastAPI web service that provides HTTP end
 │  ├── DiskCache for data persistence                        │
 │  └── JAX for high-performance computing                    │
 └─────────────────────────────────────────────────────────────┘
+```
+
+## API Response Format
+
+All API endpoints now return structured responses using standardized container classes:
+
+### **Simulation Response (`/simulate`)**
+
+Returns a `SimulationResults` object serialized to JSON with two main sections:
+
+```json
+{
+  "input": {
+    "current date": "2025-01-01",
+    "forecast_length_days": 365,
+    "raw_byte_power": 3.38,
+    "renewal_rate": 0.83,
+    "filplus_rate": 0.86
+  },
+  "simulation_output": {
+    "available_supply": [580250000.12, 582100000.45, ...],
+    "network_RBP_EIB": [15.2, 15.4, 15.6, ...],
+    "1y_sector_roi": [0.18, 0.17, 0.16, ...],
+    // ... all other simulation metrics
+  }
+}
+```
+
+- **`input`**: Metadata about the simulation run (dates, parameters used)
+- **`simulation_output`**: Dictionary mapping metric names to time series arrays (Monday values)
+
+### **Historical Data Response (`/historical-data`)**
+
+Returns a `FetchDataResults` object with a single top-level `data` dictionary:
+
+```json
+{
+  "data": {
+    // 30-day smoothed metrics
+    "raw_byte_power_averaged_over_previous_30days": 3.38,
+    "renewal_rate_averaged_over_previous_30days": 0.83,
+    "filplus_rate_averaged_over_previous_30days": 0.86,
+
+    // Historical time series (Monday values)
+    "raw_byte_power": [2.1, 2.3, 2.5, ...],
+    "renewal_rate": [0.75, 0.78, 0.82, ...],
+    "filplus_rate": [0.80, 0.83, 0.85, ...],
+
+    // Offline model data (scalars and arrays)
+    "rb_power_zero": 1234.56,
+    "qa_power_zero": 2345.67,
+    "circ_supply_zero": 123456789.12,
+    "locked_fil_zero": 45678901.23,
+    "historical_raw_power_eib": [12.5, 13.1, ...],
+    // ... all other offline data fields
+  }
+}
 ```
 
 ## Core Components
@@ -61,15 +133,16 @@ async def lifespan(app: FastAPI):
 
 **Health and Information:**
 - `GET /health` - Service health check with JAX backend information
-- `GET /` - Root endpoint with API documentation and quick start examples
+- `GET /` - Root endpoint redirecting to documentation (Sphinx docs if built, otherwise Swagger UI)
 
 **Historical Data:**
-- `GET /historical-data` - Weekly downsampled historical metrics
-- `GET /historical-data/full` - Complete historical time series
+- `GET /historical-data` - Monday-downsampled historical metrics
+  - Returns: `{"data": {...}}` with smoothed metrics, time series, and offline data
 
 **Simulations:**
-- `POST /simulate` - Run forecasts with weekly averaged results
-- `POST /simulate/full` - Run forecasts with complete daily results
+- `POST /simulate` - Run forecasts with Monday-downsampled results
+  - Returns: `{"input": {...}, "simulation_output": {...}}`
+  - Supports `output` parameter for field filtering
 
 ### 2. **Data Management (`data.py`)**
 
@@ -110,7 +183,40 @@ def trim_data_for_simulation(self, forecast_length):
     new_data['known_scheduled_pledge_release_full_vec'] = hist_data['known_scheduled_pledge_release_full_vec'][:pledge_release_length]
 ```
 
-### 3. **Request/Response Models (`models.py`)**
+### 3. **Results Containers (`results.py`)**
+
+Dataclasses that wrap and process simulation/historical data results:
+
+#### **SimulationResults**
+Container for simulation output with methods for:
+- `from_raw()`: Convert raw mechafil-jax output to structured format
+- `downsample_mondays()`: Filter time series to Monday values only
+- `filter_fields()`: Return only requested output fields
+- `to_dict()`: Serialize to JSON with `input` and `simulation_output` sections
+
+**Structure:**
+```python
+@dataclass
+class SimulationResults:
+    input_data: Dict[str, Any]  # Simulation metadata
+    simulation_output: Dict[str, Union[List[float], float, str]]  # Metrics
+```
+
+#### **FetchDataResults**
+Container for historical data with methods for:
+- `from_raw()`: Combine historical arrays, offline data, and smoothed metrics
+- `downsample_mondays()`: Filter arrays to Monday values
+- `filter_fields()`: Return subset of data fields
+- `to_dict()`: Serialize to JSON with single `data` section
+
+**Structure:**
+```python
+@dataclass
+class FetchDataResults:
+    data: Dict[str, Union[List[float], float, str]]  # All historical data
+```
+
+### 4. **Request/Response Models (`models.py`)**
 
 Pydantic models that define the API interface:
 
@@ -132,7 +238,7 @@ class SimulationRequest(BaseModel):
 - Built-in validation for output field names
 - Example payloads for API documentation
 
-### 4. **Configuration Management (`config.py`)**
+### 5. **Configuration Management (`config.py`)**
 
 Centralized settings and environment variable handling:
 
@@ -157,7 +263,7 @@ class Settings:
     RELOAD_TEST_MODE: bool = os.getenv("RELOAD_TEST_MODE", "false").lower() == "true"
 ```
 
-### 5. **Background Scheduler (`scheduler.py`)**
+### 6. **Background Scheduler (`scheduler.py`)**
 
 Automated daily data refresh system:
 
@@ -191,30 +297,44 @@ def seconds_until_next_refresh(self):
 When a simulation request arrives:
 
 ```python
-@app.post("/simulate/full")
-async def simulate_full(req: SimulationRequest):
+@app.post("/simulate")
+async def simulate(req: SimulationRequest):
     # 1. Load historical data
     hist_data = loaded_data.get_historical_data()
-    
+
     # 2. Apply defaults for missing parameters
     forecast_len = req.forecast_length_days or settings.WINDOW_DAYS
     rbp_value = req.rbp or hist_data["smoothed_rbp"]
     rr_value = req.rr or hist_data["smoothed_rr"]
     fpr_value = req.fpr or hist_data["smoothed_fpr"]
-    
+
     # 3. Convert to JAX arrays
     rbp = jnp.ones(forecast_len) * rbp_value if isinstance(rbp_value, float) else jnp.array(rbp_value)
     rr = jnp.ones(forecast_len) * rr_value if isinstance(rr_value, float) else jnp.array(rr_value)
     fpr = jnp.ones(forecast_len) * fpr_value if isinstance(fpr_value, float) else jnp.array(fpr_value)
-    
+
     # 4. Call mechafil-jax simulation
-    results = mechafil_sim.run_sim(
+    raw_results = mechafil_sim.run_sim(
         rbp, rr, fpr, lock_target, start_date, current_date,
-        forecast_len, sector_duration_days, simulation_offline_data
+        forecast_len, sector_duration_days, simulation_offline_data,
+        use_available_supply=False
     )
-    
-    # 5. Format and return results
-    return format_simulation_results(results)
+
+    # 5. Wrap results in SimulationResults container
+    results = SimulationResults.from_raw(
+        raw_results, start_date, current_date, forecast_len,
+        smoothed_rbp, smoothed_rr, smoothed_fpr
+    )
+
+    # 6. Downsample to Mondays
+    results = results.downsample_mondays(start_date)
+
+    # 7. Filter output if requested
+    if req.output is not None:
+        results = results.filter_fields(req.output)
+
+    # 8. Return as dict with 'input' and 'simulation_output' keys
+    return results.to_dict()
 ```
 
 ### 2. **Parameter Handling**
@@ -238,11 +358,14 @@ The server provides intelligent parameter processing:
 
 ### 3. **Result Processing**
 
-Two output modes are available:
+**Single Endpoint with Optional Downsampling (`/simulate`):**
+- Returns results downsampled to Monday values for efficient data transfer
+- Complete daily time series for all output variables
+- Used for analysis and visualization applications
 
-**Weekly Downsampled (`/simulate`):**
+**Monday Downsampling Logic:**
 ```python
-def select_monday_results(data_array, start_date):
+def select_mondays(data_array, start_date):
     """Select results that fall on Mondays for bandwidth efficiency."""
     mondays = []
     for i, val in enumerate(data_array):
@@ -252,16 +375,32 @@ def select_monday_results(data_array, start_date):
     return mondays
 ```
 
-**Full Results (`/simulate/full`):**
-- Complete daily time series for all output variables
-- Used for detailed analysis and research applications
-
 **Field Filtering:**
 ```python
 # Example: Request specific fields only
 {
     "forecast_length_days": 365,
     "output": ["available_supply", "network_RBP_EIB", "1y_sector_roi"]
+}
+```
+
+**Output Structure:**
+The API returns a standardized response with two main sections:
+```json
+{
+  "input": {
+    "current date": "2025-01-01",
+    "forecast_length_days": 365,
+    "raw_byte_power": 3.38,
+    "renewal_rate": 0.83,
+    "filplus_rate": 0.86
+  },
+  "simulation_output": {
+    "available_supply": [580250000.12, 582100000.45, ...],
+    "network_RBP_EIB": [15.2, 15.4, 15.6, ...],
+    "1y_sector_roi": [0.18, 0.17, 0.16, ...],
+    // ... other output fields
+  }
 }
 ```
 
@@ -317,14 +456,17 @@ The server includes comprehensive tests that ensure API responses are **mathemat
 ```python
 def test_simulation_accuracy(api_client, offline_simulation_scripts):
     # Call API endpoint
-    api_response = api_client.post("/simulate/full", json={"lock_target": 0.1})
+    api_response = api_client.post("/simulate", json={"lock_target": 0.1})
     api_data = api_response.json()
-    
+
     # Run equivalent offline simulation
     offline_result = run_offline_simulation(lock_target=0.1)
-    
+
+    # Extract simulation_output from new response format
+    api_simulation_data = api_data["simulation_output"]
+
     # Assert mathematical equality with tolerance
-    compare_results(api_data, offline_result, tolerance=1e-10)
+    compare_results(api_simulation_data, offline_result, tolerance=1e-10)
 ```
 
 ### 2. **Test Categories**
@@ -402,17 +544,35 @@ poetry run uvicorn mechafil_server.main:app --host 0.0.0.0 --port 8000
 ### 1. **Basic Simulation**
 
 ```bash
-# Minimal request using all defaults
+# Minimal request using all defaults (returns Monday-downsampled results)
 curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{}'
+```
+
+**Response structure:**
+```json
+{
+  "input": {
+    "current date": "2025-01-01",
+    "forecast_length_days": 3650,
+    "raw_byte_power": 3.38,
+    "renewal_rate": 0.83,
+    "filplus_rate": 0.86
+  },
+  "simulation_output": {
+    "available_supply": [580250000.12, 582100000.45, ...],
+    "network_RBP_EIB": [15.2, 15.4, ...],
+    // ... all other metrics
+  }
+}
 ```
 
 ### 2. **Custom Parameters**
 
 ```bash
 # 5-year forecast with custom parameters
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "rbp": 4.0,
@@ -428,7 +588,7 @@ curl -X POST http://localhost:8000/simulate/full \
 
 ```bash
 # Parameters that change over time
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "rbp": [3.0, 3.5, 4.0, 4.5, 5.0],
@@ -447,6 +607,24 @@ curl -X POST http://localhost:8000/simulate \
     "forecast_length_days": 365,
     "output": ["available_supply", "1y_sector_roi", "day_network_reward"]
   }'
+```
+
+**Filtered response:**
+```json
+{
+  "input": {
+    "current date": "2025-01-01",
+    "forecast_length_days": 365,
+    "raw_byte_power": 3.38,
+    "renewal_rate": 0.83,
+    "filplus_rate": 0.86
+  },
+  "simulation_output": {
+    "available_supply": [580250000.12, 582100000.45, ...],
+    "1y_sector_roi": [0.18, 0.17, 0.16, ...],
+    "day_network_reward": [123456.78, 123500.12, ...]
+  }
+}
 ```
 
 ## Monitoring and Maintenance

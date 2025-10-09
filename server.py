@@ -262,12 +262,16 @@ def simulate(sim: SimulationInputs) -> dict:
     OUTPUT FORMAT:
     Returns dictionary with structure:
     {
-        "1y_sector_roi": [0.187, 0.189, 0.191, ...],  // Weekly sampled values
-        "Explaination" : "Results of a Filecoin simulation with the following input values:  Raw byte power (rbp) onboarded: 2.36,  Renewal rate (rr): 0.82, Filplus deals rate (fpr): 0.74"
+        "1y_sector_roi": [0.187, 0.189, 0.191, ...],  // Monday-sampled values (weekly)
+        "Explanation": "Results of a Filecoin simulation with the following input values: Raw byte power (rbp) onboarded: 2.36, Renewal rate (rr): 0.82, Filplus deals rate (fpr): 0.74"
     }
-    
-    The output array represents time series data, with each value corresponding to a week
-    in the forecast period. Values are sampled in intervals of 7-days.
+
+    Note: The MCP server transforms the mechafil-server response from:
+      {"input": {...}, "simulation_output": {...}}
+    to this simplified format with just the requested metric and explanation.
+
+    The output array represents time series data, with each value corresponding to a Monday
+    in the forecast period (weekly sampling for efficient data transfer).
     
     INTERPRETATION GUIDANCE:
     - ROI values: 0.15 = 15% annual return, 0.25 = 25% return
@@ -326,16 +330,16 @@ def simulate(sim: SimulationInputs) -> dict:
     output_name: str = next(iter(sim_output.keys()))
     output_values: List[float] = sim_output[output_name]
 
-    input_variables = data.get("input variables", {})
-    if not input_variables:
-        raise ValueError("No input variables found in response")
+    input_data = data.get("input", {})
+    if not input_data:
+        raise ValueError("No input data found in response")
 
     # Build explanation string with actual values
     output_explanation_text = (
         "Results of a Filecoin simulation with the following input values: " +
-        f"Raw byte power (rbp) onboarded: {input_variables.get('raw_byte_power')}, " + 
-        f"Renewal rate (rr): {input_variables.get('renewal_rate')}, " + 
-        f"Filplus deals rate (fpr): {input_variables.get('filplus_rate')}"
+        f"Raw byte power (rbp) onboarded: {input_data.get('raw_byte_power')}, " +
+        f"Renewal rate (rr): {input_data.get('renewal_rate')}, " +
+        f"Filplus deals rate (fpr): {input_data.get('filplus_rate')}"
     )
 
     return {
@@ -362,47 +366,60 @@ def get_historical_data() -> str:
     - Extract default parameters that reflect recent network behavior
     
     DATA INCLUDED:
-    The response contains three main sections:
-    
-    1. SMOOTHED METRICS (30-day medians of recent data):
-       - raw_byte_power: Recent network storage onboarding rate (EiB/day)
-       - renewal_rate: Recent sector renewal rate (0-1, where 1=100% renewed)
-       - filplus_rate: Recent FIL+ adoption rate (0-1, where 1=100% FIL+ deals)
-    
-    2. MONDAY ARRAYS (weekly time series data, Mondays only):
-       - Historical values for key metrics downsampled to weekly intervals
-       - Useful for trend analysis without overwhelming detail
-       - Covers: power growth, renewal patterns, FIL+ adoption over time
-    
-    3. OFFLINE DATA (simulation initialization parameters):
-       - rb_power_zero: Initial raw byte power when simulation starts
-       - qa_power_zero: Initial quality-adjusted power 
-       - circ_supply_zero: Initial circulating FIL token supply
-       - locked_fil_zero: Initial amount of locked FIL tokens
-       - Scheduled sector expirations and pledge releases
-       - Vesting schedules and baseline parameters
+    The response contains a single "data" object with all historical information:
+
+    1. AVERAGED METRICS (30-day medians, with descriptive field names):
+       - raw_byte_power_averaged_over_previous_30days: Recent onboarding rate (EiB/day)
+       - renewal_rate_averaged_over_previous_30days: Recent renewal rate (0-1)
+       - filplus_rate_averaged_over_previous_30days: Recent FIL+ adoption (0-1)
+
+    2. HISTORICAL TIME SERIES (Monday-downsampled arrays):
+       - raw_byte_power: Weekly onboarding rates [2.1, 2.4, 2.8, ...]
+       - renewal_rate: Weekly renewal rates [0.75, 0.78, 0.81, ...]
+       - filplus_rate: Weekly FIL+ adoption [0.82, 0.84, 0.85, ...]
+
+    3. OFFLINE MODEL DATA (initialization parameters, scalars and arrays):
+       - rb_power_zero: Initial raw byte power (PiB)
+       - qa_power_zero: Initial quality-adjusted power (PiB)
+       - circ_supply_zero: Initial circulating FIL supply
+       - locked_fil_zero: Initial locked FIL amount
+       - historical_raw_power_eib: Historical RBP array (Monday values)
+       - historical_qa_power_eib: Historical QAP array (Monday values)
+       - rb_known_scheduled_expire_vec: Scheduled RBP expirations
+       - qa_known_scheduled_expire_vec: Scheduled QAP expirations
+       - known_scheduled_pledge_release_full_vec: Scheduled pledge releases
+       - burnt_fil_vec: Historical cumulative gas burn
+       - And many more fields for complete simulation initialization
+
+    All data fields are contained in a single flat "data" dictionary for easy access.
     
     OUTPUT FORMAT:
     Returns JSON string with structure:
     {
-        "message": "Historical data reduced to Mondays only (no averaging)",
-        "smoothed_metrics": {
-            "raw_byte_power": 3.38,    // EiB/day onboarding rate
-            "renewal_rate": 0.83,      // 83% renewal rate  
-            "filplus_rate": 0.86       // 86% FIL+ adoption
-        },
-        "monday_arrays": {
-            "raw_byte_power": [2.1, 2.4, 2.8, ...],  // Weekly historical values
+        "data": {
+            // 30-day smoothed metrics (scalars)
+            "raw_byte_power_averaged_over_previous_30days": 3.38,
+            "renewal_rate_averaged_over_previous_30days": 0.83,
+            "filplus_rate_averaged_over_previous_30days": 0.86,
+
+            // Historical time series (Monday values only - weekly sampling)
+            "raw_byte_power": [2.1, 2.4, 2.8, ...],
             "renewal_rate": [0.75, 0.78, 0.81, ...],
-            "filplus_rate": [0.82, 0.84, 0.85, ...]
-        },
-        "offline_data_mondays": {
-            "rb_power_zero": 1234.56,          // PiB initial power
-            "qa_power_zero": 2345.67,          // PiB initial QA power
-            "circ_supply_zero": 123456789.12,  // FIL initial supply
-            // ... extensive initialization data for simulations
+            "filplus_rate": [0.82, 0.84, 0.85, ...],
+
+            // Offline model data (scalars and Monday-downsampled arrays)
+            "rb_power_zero": 1234.56,
+            "qa_power_zero": 2345.67,
+            "circ_supply_zero": 123456789.12,
+            "locked_fil_zero": 45678901.23,
+            "historical_raw_power_eib": [12.5, 13.1, ...],
+            "historical_qa_power_eib": [45.2, 46.1, ...],
+            // ... all other historical data fields in a single flat dictionary
         }
     }
+
+    Note: The mechafil-server now returns all data in a single "data" object using the
+    FetchDataResults container class, with Monday-downsampled arrays for efficiency.
     
     TYPICAL USE CASES:
     - "What's the current state of the Filecoin network?"

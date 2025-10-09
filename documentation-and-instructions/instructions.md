@@ -407,18 +407,22 @@ All parameters are **optional** with defaults from recent 30-day network median.
 
 ### **Output Structure**
 
-Returns weekly-sampled time series:
+Returns Monday-sampled time series (simplified from mechafil-server response):
 ```python
 {
-    "metric_name": [value1, value2, ...],  # Weekly values
-    "Explanation": "Simulation parameters: rbp=X.XX, rr=X.XX, fpr=X.XX"
+    "metric_name": [value1, value2, ...],  # Monday values (weekly sampling)
+    "Explanation": "Results of a Filecoin simulation with the following input values: Raw byte power (rbp) onboarded: X.XX, Renewal rate (rr): X.XX, Filplus deals rate (fpr): X.XX"
 }
 ```
+
+**Note**: The MCP tool extracts only the requested metric from the mechafil-server response.
+The underlying mechafil-server returns: `{"input": {...}, "simulation_output": {...}}`
 
 **Value Interpretation**:
 - ROI: `0.15` = 15% annual return
 - Supply: In FIL tokens (e.g., `580250000` = 580M FIL)
 - Power: In EiB (e.g., `15.2` = 15.2 Exbibytes)
+- Arrays contain values for each Monday in the forecast period (weekly downsampling)
 
 ---
 
@@ -426,20 +430,34 @@ Returns weekly-sampled time series:
 
 ### **Output Structure**
 
-Returns JSON with three sections:
+Returns JSON string with a single `data` object containing all historical data:
 
-**1. Smoothed Metrics** (30-day median, useful as simulation defaults):
-- `raw_byte_power`: Recent onboarding rate (EiB/day)
-- `renewal_rate`: Recent renewal rate (0-1)
-- `filplus_rate`: Recent FIL+ adoption (0-1)
+```python
+{
+    "data": {
+        // 30-day smoothed metrics (scalars)
+        "raw_byte_power_averaged_over_previous_30days": 3.38,
+        "renewal_rate_averaged_over_previous_30days": 0.83,
+        "filplus_rate_averaged_over_previous_30days": 0.86,
 
-**2. Monday Arrays** (weekly historical time series):
-- Historical trends from mainnet launch to present
-- Weekly sampling for efficient data transfer
+        // Historical time series (Monday values only)
+        "raw_byte_power": [2.1, 2.3, 2.5, ...],
+        "renewal_rate": [0.75, 0.78, 0.82, ...],
+        "filplus_rate": [0.80, 0.83, 0.85, ...],
 
-**3. Offline Data** (simulation initialization):
-- Initial network state parameters
-- Scheduled expirations and vesting schedules
+        // Offline model data (scalars and Monday-downsampled arrays)
+        "rb_power_zero": 1234.56,
+        "qa_power_zero": 2345.67,
+        "circ_supply_zero": 123456789.12,
+        // ... all other historical data fields
+    }
+}
+```
+
+**Key Components**:
+1. **Smoothed Metrics**: 30-day medians useful as simulation defaults
+2. **Time Series Arrays**: Monday-downsampled historical trends (weekly sampling)
+3. **Offline Data**: Initial network state and scheduled operations for simulation initialization
 
 ---
 
@@ -471,21 +489,21 @@ Returns JSON with three sections:
 User: "What is the current FIL+ adoption rate?"
 Analysis: Asking for present network state
 Tool: get_historical_data
-Action: Extract smoothed_metrics.filplus_rate from response
+Action: Extract data.filplus_rate_averaged_over_previous_30days from response
 ```
 
 ```
 User: "How much FIL is currently locked as pledge?"
 Analysis: Current network metric inquiry
 Tool: get_historical_data
-Action: Extract offline_data_mondays.locked_fil_zero from response
+Action: Extract data.locked_fil_zero from response
 ```
 
 ```
 User: "What's the recent onboarding rate been?"
 Analysis: Recent historical trend
 Tool: get_historical_data
-Action: Extract smoothed_metrics.raw_byte_power and/or monday_arrays.raw_byte_power for trend
+Action: Extract data.raw_byte_power_averaged_over_previous_30days and/or data.raw_byte_power (array) for trend
 ```
 
 #### **Future Projection Queries** → Use `simulate`
@@ -575,7 +593,7 @@ Action: Present side-by-side comparison with economic interpretation
 User: "How has renewal rate evolved over the past year?"
 Analysis: Historical pattern identification
 Tool: get_historical_data
-Action: Extract monday_arrays.renewal_rate, analyze recent trend
+Action: Extract data.renewal_rate (array of Monday values), analyze recent trend
 ```
 
 ```
@@ -723,8 +741,8 @@ Tool Call:
 get_historical_data()
 
 Response Construction:
-- Extract smoothed_metrics for current rates
-- Extract offline_data_mondays for current network size
+- Extract data.*_averaged_over_previous_30days for current 30-day averages
+- Extract data.rb_power_zero, data.qa_power_zero for current network size
 - Summarize key metrics:
   * Total power (RBP and QAP)
   * FIL+ adoption rate

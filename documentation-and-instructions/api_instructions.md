@@ -39,18 +39,16 @@ This runs a simulation with all default parameters derived from recent historica
 
 | Endpoint | Method | Purpose | Response Format |
 |----------|--------|---------|----------------|
-| `/` | GET | Server information and quick help | JSON metadata |
+| `/` | GET | Server documentation redirect | Redirect to /documentation or /docs |
 | `/health` | GET | Health check and JAX backend info | JSON status |
-| `/historical-data` | GET | Historical data (Monday values only) | JSON with arrays |
-| `/historical-data/full` | GET | Complete historical data | JSON with full arrays |
-| `/simulate` | POST | Run simulation (Monday results) | JSON with downsampled results |
-| `/simulate/full` | POST | Run simulation (complete results) | JSON with full results |
+| `/historical-data` | GET | Historical data (Monday-downsampled) | `{"data": {...}}` |
+| `/simulate` | POST | Run simulation (Monday-downsampled) | `{"input": {...}, "simulation_output": {...}}` |
 
 ---
 
-## Historical Data Endpoints
+## Historical Data Endpoint
 
-### 1. Historical Data Summary (`GET /historical-data`)
+### `GET /historical-data`
 
 **Purpose**: Get historical Filecoin network metrics downsampled to Monday values for efficient data transfer.
 
@@ -60,61 +58,44 @@ curl -X GET http://localhost:8000/historical-data
 ```
 
 **Response Structure**:
+Returns a `FetchDataResults` object with a single `data` dictionary containing:
+
 ```json
 {
-  "message": "Historical data reduced to Mondays only (no averaging)",
-  "smoothed_metrics": {
-    "raw_byte_power": 3.38,      // 30-day median RBP onboarding (PIB/day)
-    "renewal_rate": 0.83,        // 30-day median renewal rate
-    "filplus_rate": 0.86         // 30-day median FIL+ rate
-  },
-  "monday_arrays": {
-    "raw_byte_power": [2.1, 2.3, 2.5, ...],    // Monday RBP values (PIB/day)
-    "renewal_rate": [0.75, 0.78, 0.82, ...],   // Monday renewal rates
-    "filplus_rate": [0.80, 0.83, 0.85, ...]    // Monday FIL+ rates
-  },
-  "offline_data_mondays": {
-    // Complete historical dataset filtered to Monday values
+  "data": {
+    // 30-day smoothed metrics (scalars)
+    "raw_byte_power_averaged_over_previous_30days": 3.38,
+    "renewal_rate_averaged_over_previous_30days": 0.83,
+    "filplus_rate_averaged_over_previous_30days": 0.86,
+
+    // Historical time series (Monday values only)
+    "raw_byte_power": [2.1, 2.3, 2.5, ...],
+    "renewal_rate": [0.75, 0.78, 0.82, ...],
+    "filplus_rate": [0.80, 0.83, 0.85, ...],
+
+    // Offline model data (scalars and Monday-downsampled arrays)
+    "rb_power_zero": 1234.56,
+    "qa_power_zero": 2345.67,
+    "circ_supply_zero": 123456789.12,
+    "locked_fil_zero": 45678901.23,
     "historical_raw_power_eib": [12.5, 13.1, ...],
     "historical_qa_power_eib": [45.2, 46.1, ...],
-    // ... other historical data fields
+    "rb_known_scheduled_expire_vec": [...],
+    "qa_known_scheduled_expire_vec": [...],
+    "known_scheduled_pledge_release_full_vec": [...],
+    // ... other historical data fields (see Historical Data Fields Reference below)
   }
 }
 ```
 
-### 2. Complete Historical Data (`GET /historical-data/full`)
-
-**Purpose**: Get complete daily historical data for detailed analysis.
-
-**Request**:
-```bash
-curl -X GET http://localhost:8000/historical-data/full
-```
-
-**Response Structure**:
-```json
-{
-  "message": "Complete historical data",
-  "smoothed_metrics": {
-    "raw_byte_power": 3.38,
-    "renewal_rate": 0.83,
-    "filplus_rate": 0.86
-  },
-  "historical_arrays": {
-    "raw_byte_power": [2.1, 2.0, 2.2, 2.3, 2.1, ...],  // Daily values
-    "renewal_rate": [0.75, 0.76, 0.77, 0.78, ...],      // Daily values  
-    "filplus_rate": [0.80, 0.81, 0.82, 0.83, ...]       // Daily values
-  },
-  "offline_data": {
-    // Complete simulation data dictionary with all fields
-    // See "Historical Data Fields" section below for complete reference
-  }
-}
-```
+**Key Points**:
+- All arrays are downsampled to Monday values only (weekly sampling)
+- Returns complete data in a single `data` object
+- Scalars represent either initial values or 30-day smoothed metrics
 
 ### Historical Data Fields Reference
 
-The `offline_data` section contains all historical network data required for simulations:
+The `data` object contains all historical network data required for simulations:
 
 #### Power Statistics
 - **`rb_power_zero`**: Initial raw byte power (PiB)
@@ -145,9 +126,9 @@ The `offline_data` section contains all historical network data required for sim
 
 ---
 
-## Simulation Endpoints
+## Simulation Endpoint
 
-### 1. Weekly Simulation Results (`POST /simulate`)
+### `POST /simulate`
 
 **Purpose**: Run economic forecasts with results downsampled to Monday values for efficient data transfer.
 
@@ -178,60 +159,32 @@ curl -X POST http://localhost:8000/simulate \
 ```
 
 **Response Structure**:
+Returns a `SimulationResults` object with two main sections:
+
 ```json
 {
-  "input variables": {
+  "input": {
+    "current date": "2025-01-01",
     "forecast_length_days": 365,
     "raw_byte_power": 4.0,
     "renewal_rate": 0.85,
     "filplus_rate": 0.90
   },
   "simulation_output": {
-    // Monday-only values for all simulation outputs
+    // Monday-downsampled time series for all metrics
     "available_supply": [580250000.12, 582100000.45, ...],
     "network_RBP_EIB": [15.2, 15.4, 15.6, ...],
-    "1y_sector_roi": [1.25, 1.23, 1.21, ...],
+    "1y_sector_roi": [0.18, 0.17, 0.16, ...],
     // ... other output fields (see Output Fields Reference)
   }
 }
 ```
 
-### 2. Complete Simulation Results (`POST /simulate/full`)
-
-**Purpose**: Run economic forecasts with complete daily results for detailed analysis.
-
-**Request**: Same structure as `/simulate`
-
-**Example Request**:
-```bash
-curl -X POST http://localhost:8000/simulate/full \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "forecast_length_days": 1825,
-    "lock_target": 0.2,
-    "output": "all"
-  }'
-```
-
-**Response Structure**:
-```json
-{
-  "input": {
-    "forecast_length_days": 1825
-  },
-  "smoothed_metrics": {
-    "raw_byte_power": 3.38,
-    "renewal_rate": 0.83,
-    "filplus_rate": 0.86
-  },
-  "simulation_output": {
-    // Complete daily time series for all outputs
-    "available_supply": [580250000.12, 580890000.23, 581510000.45, ...],
-    "network_RBP_EIB": [15.2, 15.21, 15.22, 15.23, ...],
-    // ... full daily results for ~30+ output variables
-  }
-}
-```
+**Key Points**:
+- `input`: Metadata about the simulation (dates and actual parameters used)
+- `simulation_output`: All simulation metrics downsampled to Monday values (weekly sampling)
+- Arrays contain time series data with values for each Monday in the forecast period
+- Values are rounded to 2 decimal places for efficiency
 
 ---
 
@@ -457,7 +410,7 @@ curl -X POST http://localhost:8000/simulate \
 **Scenario**: Analyze mining profitability under different renewal scenarios
 
 ```bash
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "rr": [0.9, 0.85, 0.8, 0.75, 0.7],
@@ -471,7 +424,7 @@ curl -X POST http://localhost:8000/simulate/full \
 **Scenario**: Model impact of changing lock target policy
 
 ```bash
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "lock_target": [0.35, 0.32, 0.30, 0.28, 0.25, 0.22, 0.20],
@@ -482,14 +435,14 @@ curl -X POST http://localhost:8000/simulate/full \
 
 ### 4. Long-term Network Growth Analysis
 
-**Scenario**: 10-year forecast with growing FIL+ adoption
+**Scenario**: 5-year forecast with growing FIL+ adoption
 
 ```bash
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "rbp": 5.0,
-    "fpr": [0.5, 0.6, 0.7, 0.8, 0.9],
+    "fpr": 0.9,
     "forecast_length_days": 1825,
     "output": ["network_QAP_EIB", "cum_network_reward", "circ_supply"]
   }'
@@ -501,7 +454,7 @@ curl -X POST http://localhost:8000/simulate/full \
 
 ```bash
 # High growth scenario
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "rbp": 6.0,
@@ -510,8 +463,8 @@ curl -X POST http://localhost:8000/simulate/full \
     "forecast_length_days": 365
   }'
 
-# Conservative scenario  
-curl -X POST http://localhost:8000/simulate/full \
+# Conservative scenario
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "rbp": 2.0,
@@ -544,12 +497,12 @@ curl -X POST http://localhost:8000/simulate \
 
 **Step 1**: Get historical data for baseline comparison
 ```bash
-curl -X GET http://localhost:8000/historical-data/full
+curl -X GET http://localhost:8000/historical-data
 ```
 
 **Step 2**: Run projection with similar parameters
 ```bash
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "forecast_length_days": 365
@@ -562,7 +515,7 @@ curl -X POST http://localhost:8000/simulate/full \
 
 ```bash
 # Accelerated growth
-curl -X POST http://localhost:8000/simulate/full \
+curl -X POST http://localhost:8000/simulate \
   -H 'Content-Type: application/json' \
   -d '{
     "rbp": [4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0],
@@ -654,9 +607,8 @@ curl http://localhost:8000/health
    - Add parameters incrementally
    - Check parameter ranges and types
 
-3. **Use Appropriate Endpoints**:
-   - Use `/simulate` for quick analysis (Monday values)
-   - Use `/simulate/full` for detailed research (daily values)
+3. **Use Appropriate Endpoint**:
+   - Use `/simulate` for all forecasts (returns Monday-downsampled values for efficient data transfer)
 
 ---
 
@@ -697,9 +649,9 @@ curl http://localhost:8000/health
   - **Network growth**: `network_RBP_EIB`, `network_QAP_EIB`, `day_network_reward`
 
 #### Result Processing
-- Use `/simulate` for visualization and dashboards (Monday values)
-- Use `/simulate/full` for detailed analysis and research
-- Consider data volume for long forecasts with full results
+- All simulations return Monday-downsampled values for efficient data transfer
+- Use `output` parameter to request only specific fields
+- Consider data volume for long forecasts (default 10 years = ~520 Monday values per metric)
 
 ### 4. **Performance Optimization**
 
@@ -767,32 +719,30 @@ class MechaFilClient:
         response = requests.get(f"{self.base_url}/health")
         return response.json()
     
-    def get_historical_data(self, full=False):
-        endpoint = "/historical-data/full" if full else "/historical-data"
-        response = requests.get(f"{self.base_url}{endpoint}")
+    def get_historical_data(self):
+        response = requests.get(f"{self.base_url}/historical-data")
         return response.json()
-    
-    def run_simulation(self, params=None, full_results=False):
-        endpoint = "/simulate/full" if full_results else "/simulate"
+
+    def run_simulation(self, params=None):
         if params is None:
             params = {}
-        
+
         response = requests.post(
-            f"{self.base_url}{endpoint}",
+            f"{self.base_url}/simulate",
             json=params,
             headers={"Content-Type": "application/json"}
         )
-        
+
         if response.status_code != 200:
             raise Exception(f"API Error: {response.status_code} - {response.text}")
-        
+
         return response.json()
     
     def scenario_analysis(self, scenarios):
         results = {}
         for name, params in scenarios.items():
             try:
-                results[name] = self.run_simulation(params, full_results=True)
+                results[name] = self.run_simulation(params)
             except Exception as e:
                 print(f"Scenario {name} failed: {e}")
                 results[name] = None
@@ -805,8 +755,11 @@ client = MechaFilClient()
 print("Server status:", client.health_check())
 
 # Get historical context
-hist_data = client.get_historical_data(full=False)
-print("Recent smoothed metrics:", hist_data["smoothed_metrics"])
+hist_data = client.get_historical_data()
+print("Recent 30-day averages:")
+print("  RBP:", hist_data["data"]["raw_byte_power_averaged_over_previous_30days"])
+print("  Renewal rate:", hist_data["data"]["renewal_rate_averaged_over_previous_30days"])
+print("  FIL+ rate:", hist_data["data"]["filplus_rate_averaged_over_previous_30days"])
 
 # Run scenarios
 scenarios = {
@@ -817,7 +770,7 @@ scenarios = {
 
 results = client.scenario_analysis(scenarios)
 
-# Process results
+# Process results (note the new response structure with 'simulation_output')
 for scenario_name, result in results.items():
     if result:
         roi_data = result["simulation_output"]["1y_sector_roi"]
@@ -840,17 +793,14 @@ class MechaFilClient {
         return response.data;
     }
 
-    async getHistoricalData(full = false) {
-        const endpoint = full ? '/historical-data/full' : '/historical-data';
-        const response = await axios.get(`${this.baseUrl}${endpoint}`);
+    async getHistoricalData() {
+        const response = await axios.get(`${this.baseUrl}/historical-data`);
         return response.data;
     }
 
-    async runSimulation(params = {}, fullResults = false) {
-        const endpoint = fullResults ? '/simulate/full' : '/simulate';
-        
+    async runSimulation(params = {}) {
         try {
-            const response = await axios.post(`${this.baseUrl}${endpoint}`, params, {
+            const response = await axios.post(`${this.baseUrl}/simulate`, params, {
                 headers: { 'Content-Type': 'application/json' }
             });
             return response.data;
@@ -861,16 +811,16 @@ class MechaFilClient {
 
     async scenarioAnalysis(scenarios) {
         const results = {};
-        
+
         for (const [name, params] of Object.entries(scenarios)) {
             try {
-                results[name] = await this.runSimulation(params, true);
+                results[name] = await this.runSimulation(params);
             } catch (error) {
                 console.error(`Scenario ${name} failed:`, error.message);
                 results[name] = null;
             }
         }
-        
+
         return results;
     }
 }
@@ -888,11 +838,11 @@ async function main() {
         forecast_length_days: 365,
         output: ['available_supply', '1y_sector_roi']
     });
-    
+
     console.log('Baseline simulation completed');
-    console.log('Input parameters:', baselineResult.input_variables);
-    
-    // Analyze ROI trends
+    console.log('Input parameters:', baselineResult.input);
+
+    // Analyze ROI trends (note the new response structure)
     const roiData = baselineResult.simulation_output['1y_sector_roi'];
     const avgRoi = roiData.reduce((a, b) => a + b, 0) / roiData.length;
     console.log(`Average sector ROI: ${avgRoi.toFixed(3)}`);
