@@ -1,0 +1,50 @@
+# Filecoin Economic Context
+
+## Network Overview
+- **Purpose**: Filecoin is a decentralized storage marketplace where providers earn FIL by proving storage capacity and serving client data.
+- **Incentive Model**: Block production probability scales with storage power, aligning network security with real storage contributions.
+- **Digital Twin**: MechaFil models these dynamics to forecast network trajectories, enabling data-driven economic analysis.
+
+## Power, Rewards, and Consensus
+- **Raw Byte Power (RBP)** measures physical storage committed (EiB).
+- **Quality Adjusted Power (QAP)** applies multipliers to RBP (`QAP = RBP × SectorQualityMultiplier`), with FIL+ verified deals receiving a 10× multiplier.
+- **Block Rewards**: Total daily rewards follow Filecoin’s minting schedule and are shared in proportion to `MinerQAP / NetworkQAP`.
+- **Election Probability**: Expected block wins per epoch are approximately `5 × (MinerQAP / NetworkQAP)`, keeping storage power central to consensus.
+
+## Minting and Token Economics
+- **Supply Cap**: 2 billion FIL, with 55% allocated to storage mining rewards.
+- **Dual Minting System**:
+  - **Simple Minting (30%)**: Time-based exponential decay, smoothing rewards over time.
+  - **Baseline Minting (70%)**: Releases FIL as network QAP approaches a target baseline (`2.5 EiB × 2^(t in years)`), creating counter-cyclical incentives.
+- **Economic Impact**: When network QAP lags baseline, reward release slows; surpassing baseline accelerates minting, encouraging sustained growth.
+
+## Pledge and Collateral Mechanics
+- **Initial Pledge** combines Storage Pledge (≈20 days of expected rewards) and Consensus Pledge (`30% × CirculatingSupply × SectorQAP / max(Baseline, NetworkQAP)`).
+- **Capital Dynamics**:
+  - Higher QAP (e.g., via FIL+) increases collateral demands.
+  - Baseline growth gradually lowers pledge-per-QAP, improving capital efficiency over time.
+- **Reward Vesting**: Block rewards vest linearly over 180 days, creating long-term alignment and additional locked supply.
+
+## FIL+ Program Economics
+- **Competitive Advantage**: FIL+ sectors gain 10× QAP, dramatically increasing reward share relative to physical storage.
+- **Trade-offs**: Collateral requirements also scale 10×, demanding careful capital planning.
+- **Network Effects**:
+  - Widespread FIL+ adoption amplifies network-wide QAP, raising pledge needs and compressing the FIL+ advantage.
+  - Verified deal scarcity and governance-controlled DataCap shape provider strategies.
+
+## Supply, Lockups, and Burning
+- **Circulating Supply**: `Vested + Mined - Burned - Locked`; available supply excludes locked collateral and vesting balances.
+- **Lock Target**: Protocol aims to keep ~30% of circulating FIL locked as pledge, reinforcing security while tightening liquid supply.
+- **Deflationary Forces**:
+  - **Gas Burning** removes BaseFee payments permanently.
+  - **Penalties** (fault/termination fees) are also burned, offsetting inflation.
+
+## Storage Provider Economics
+- **Revenue Streams**: Block rewards, client storage fees, optional FIL+ premiums.
+- **Cost Drivers**: Pledge collateral, sealing costs, ongoing operations, and potential penalties.
+- **Profitability Factors**: FIL+ acquisition, network competition, renewal decisions, capital efficiency, and external market conditions.
+
+## Market Dynamics and Risks
+- **Growth vs. Competition**: Accelerated onboarding boosts total rewards when below baseline but dilutes per-provider share unless you participate.
+- **Renewal Rates**: High renewal stabilizes power and locks collateral; low renewal frees capital but can erode capacity.
+- **Uncertainties**: FIL price volatility, policy changes, DataCap availability, and infrastructure constraints all influence realized outcomes beyond model projections.

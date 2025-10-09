@@ -1,0 +1,43 @@
+# MCP Tools Context & Best Practices
+
+## Available Tools
+
+### `get_historical_data`
+- **Endpoint**: `/historical-data`
+- **Purpose**: Retrieve real-world Filecoin network data from mainnet launch to the latest cached date (typically three days behind).
+- **Response**: JSON string containing a `data` dictionary with:
+  - 30-day medians (`raw_byte_power_averaged_over_previous_30days`, `renewal_rate_averaged_over_previous_30days`, `filplus_rate_averaged_over_previous_30days`).
+  - Historical Monday-sampled series (`raw_byte_power`, `renewal_rate`, `filplus_rate`, `historical_raw_power_eib`, `historical_qa_power_eib`, etc.).
+  - Offline model vectors used to seed simulations (scheduled expiries, pledge releases, burn history).
+- **Typical Uses**:
+  - Establish current network conditions and default parameters.
+  - Describe historical trends and context for simulations.
+  - Validate user assumptions against empirical data.
+
+### `simulate`
+- **Endpoint**: `/simulate`
+- **Purpose**: Run MechaFil economic forecasts under specific scenarios and return Monday-sampled time series.
+- **Key Arguments** (all optional, defaults derived from recent medians):
+  - `rbp`: Raw Byte Power onboarding (EiB/day).
+  - `rr`: Renewal rate (0–1 fraction).
+  - `fpr`: FIL+ share (0–1 fraction).
+  - `lock_target`: Target consensus pledge ratio (default 0.3).
+  - `forecast_length_days`: Forecast horizon in days (critical; must match user context).
+  - `sector_duration_days`: Average sector lifetime (default 540).
+  - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`.
+- **Response**: Dictionary with the requested metric array (Monday values) and an `Explanation` summarizing the actual inputs after defaults were applied.
+- **Usage Patterns**:
+  - Single-run forecasts for direct projections.
+  - Baseline plus scenario comparisons to evaluate parameter sensitivity.
+  - Metric-specific investigations (ROI, supply, rewards, pledge, power).
+
+## Tooling Best Practices
+- **Time Horizon Discipline**: Always infer or elicit user timeframes and set `forecast_length_days` explicitly; avoid relying on the 10-year default.
+- **Baseline Establishment**: Start complex analyses with `get_historical_data` to anchor parameters and explain current state before simulating futures.
+- **Parameter Validation**: Flag unrealistic inputs (e.g., renewal rates outside 0–1, extreme RBP values) and discuss implications before executing.
+- **Metric Precision**: Use the exact metric identifiers returned by the API (e.g., `"network_QAP_EIB"` instead of legacy names) to avoid call failures.
+- **Scenario Consistency**: Keep non-varied parameters aligned across comparative runs so differences isolate the scenario factor.
+- **Latency Awareness**: Responses are Monday-sampled; clarify this cadence when interpreting trends or aggregating results.
+- **Explanation Field**: Cross-check the `Explanation` payload to confirm the simulation used intended defaults or overrides, and reference it when reporting inputs.
+- **Post-Processing**: Translate numeric outputs into meaningful economic insights—compare start/end values, compute deltas, or express percentages where helpful.
+- **Error Handling**: If tool responses indicate connection issues or missing data, inform the user, recommend reruns, or suggest checking the mechafil server status.
