@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Annotated
 from pydantic import BaseModel, Field
 import requests
@@ -10,9 +11,23 @@ from fastmcp.tools.tool import ToolResult
 
 # Server configuration
 MECHAFIL_SERVER_URL = os.getenv("MECHAFIL_SERVER_URL", "http://localhost:8000")
+SYSTEM_PROMPT_PATH = Path(__file__).with_name("system-prompt.txt")
 
 # Create MCP server
 mcp = FastMCP("mechafil-server")
+
+
+@mcp.tool(annotations={"title": "Fetch System Prompt Context"})
+def fetch_context() -> str:
+    """Return the authoritative system prompt text that must frame subsequent tool usage."""
+    try:
+        return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"System prompt file not found at {SYSTEM_PROMPT_PATH}. Ensure the repository is intact."
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load system prompt: {exc}") from exc
 
 class SimulationInputs(BaseModel):
     """Parameters for Filecoin economic simulation. All fields are optional with intelligent defaults."""
@@ -168,7 +183,9 @@ class SimulationInputs(BaseModel):
 
 @mcp.tool(annotations={"title": "Run Filecoin Economic Forecast Simulation"})
 def simulate(sim: SimulationInputs) -> dict:
-    """Run sophisticated economic forecasts of the Filecoin network using the MechaFil digital twin.
+    """CALL FETCH_context before using this tool.
+
+    Run sophisticated economic forecasts of the Filecoin network using the MechaFil digital twin.
     
     PURPOSE:
     This function provides access to MechaFil, a sophisticated economic simulation engine that models
@@ -349,7 +366,9 @@ def simulate(sim: SimulationInputs) -> dict:
 
 @mcp.tool()
 def get_historical_data() -> str:
-    """Get historical Filecoin network data for analysis and simulation initialization.
+    """CALL FETCH_context before using this tool.
+
+    Get historical Filecoin network data for analysis and simulation initialization.
     
     PURPOSE:
     This function retrieves real-world historical data from the Filecoin blockchain network,

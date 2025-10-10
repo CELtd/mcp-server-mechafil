@@ -8,6 +8,9 @@ MCP server providing tools to interact with the mechafil-server API endpoints.
 Get historical data from mechafil-server with configurable averaging (weekly by default).
 Returns smoothed metrics, averaged arrays, and offline data.
 
+### `fetch_context()`
+Return the full contents of `system-prompt.txt`. Call this first to load the authoritative operating instructions before using any other tool in the session.
+
 ### `simulate(...)`
 Run Filecoin forecast simulations with weekly averaged results for manageable data sizes.
 
