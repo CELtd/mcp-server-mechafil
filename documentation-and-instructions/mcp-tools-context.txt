@@ -22,7 +22,7 @@
   - `rr`: Renewal rate (0–1 fraction).
   - `fpr`: FIL+ share (0–1 fraction).
   - `lock_target`: Target consensus pledge ratio (default 0.3).
-  - `forecast_length_days`: Forecast horizon in days (critical; must match user context).
+  - `forecast_length_days`: Forecast horizon in days (critical; must match user context, except extend by +90 days when `requested_metric="1y_sector_roi"` so the rolling ROI metric covers the full window).
   - `sector_duration_days`: Average sector lifetime (default 540).
   - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`.
 - **Response**: Dictionary with the requested metric array (Monday values) and an `Explanation` summarizing the actual inputs after defaults were applied.
@@ -32,12 +32,12 @@
   - Metric-specific investigations (ROI, supply, rewards, pledge, power).
 
 ## Tooling Best Practices
-- **Time Horizon Discipline**: Always infer or elicit user timeframes and set `forecast_length_days` explicitly; avoid relying on the 10-year default.
+- **Time Horizon Discipline**: Always infer or elicit user timeframes and set `forecast_length_days` explicitly; avoid relying on the 10-year default. The only exception is when returning `1y_sector_roi`, where you must add 90 extra days beyond the user's requested horizon to capture the trailing 365-day ROI.
 - **Baseline Establishment**: Start complex analyses with `get_historical_data` to anchor parameters and explain current state before simulating futures.
 - **Parameter Validation**: Flag unrealistic inputs (e.g., renewal rates outside 0–1, extreme RBP values) and discuss implications before executing.
 - **Metric Precision**: Use the exact metric identifiers returned by the API (e.g., `"network_QAP_EIB"` instead of legacy names) to avoid call failures.
 - **Scenario Consistency**: Keep non-varied parameters aligned across comparative runs so differences isolate the scenario factor.
 - **Latency Awareness**: Responses are Monday-sampled; clarify this cadence when interpreting trends or aggregating results.
 - **Explanation Field**: Cross-check the `Explanation` payload to confirm the simulation used intended defaults or overrides, and reference it when reporting inputs.
-- **Post-Processing**: Translate numeric outputs into meaningful economic insights—compare start/end values, compute deltas, or express percentages where helpful.
+- **Post-Processing**: Translate numeric outputs into meaningful economic insights—compare start/end values, compute deltas, or express percentages where helpful—while staying strictly grounded in the documented Filecoin context and observable data.
 - **Error Handling**: If tool responses indicate connection issues or missing data, inform the user, recommend reruns, or suggest checking the mechafil server status.

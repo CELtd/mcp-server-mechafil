@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Annotated
 from pydantic import BaseModel, Field
@@ -12,6 +13,64 @@ from fastmcp.tools.tool import ToolResult
 # Server configuration
 MECHAFIL_SERVER_URL = os.getenv("MECHAFIL_SERVER_URL", "http://localhost:8000")
 SYSTEM_PROMPT_PATH = Path(__file__).with_name("system-prompt.txt")
+SYSTEM_PROMPT_INCLUDE_PATTERN = re.compile(r"\{\{\s*include:(?P<path>[^}]+)\}\}")
+
+
+def _render_system_prompt(template_path: Path) -> str:
+    """Load the template prompt and replace include placeholders with file contents."""
+    try:
+        template_text = template_path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"System prompt template not found at {template_path}. Ensure the repository is intact."
+        ) from exc
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load system prompt template: {exc}") from exc
+
+    def _include(match: re.Match) -> str:
+        relative_path = match.group("path").strip()
+        include_path = (template_path.parent / relative_path).resolve()
+
+        def _read(path: Path) -> str:
+            try:
+                return path.read_text(encoding="utf-8").strip()
+            except Exception as exc:  # pragma: no cover - bubble up with context
+                raise RuntimeError(
+                    f"Failed to load included file '{relative_path}' for system prompt: {exc}"
+                ) from exc
+
+        if include_path.exists():
+            content = _read(include_path)
+            return f"{content}\n"
+
+        # Fallback: auto-convert .md files to .txt when requested.
+        relative_path_obj = Path(relative_path)
+        fallback_tried = False
+        if relative_path_obj.suffix.lower() == ".txt":
+            md_candidate = (template_path.parent / relative_path_obj.with_suffix(".md")).resolve()
+            fallback_tried = True
+            if md_candidate.exists():
+                content = _read(md_candidate)
+                try:
+                    include_path.write_text(content, encoding="utf-8")
+                except Exception:
+                    # If writing fails, we still return the content so the prompt renders.
+                    pass
+                return f"{content}\n"
+
+        raise FileNotFoundError(
+            f"Included file not found for system prompt: {relative_path} "
+            f"(resolved to {include_path})"
+            + (" and no .md fallback was available." if fallback_tried else ".")
+        )
+
+    rendered = SYSTEM_PROMPT_INCLUDE_PATTERN.sub(_include, template_text)
+    if SYSTEM_PROMPT_INCLUDE_PATTERN.search(rendered):
+        raise RuntimeError(
+            "System prompt rendering incomplete: unresolved include placeholder detected."
+        )
+    return rendered
+
 
 # Create MCP server
 mcp = FastMCP("mechafil-server")
@@ -19,15 +78,13 @@ mcp = FastMCP("mechafil-server")
 
 @mcp.tool(annotations={"title": "Fetch System Prompt Context"})
 def fetch_context() -> str:
-    """Return the authoritative system prompt text that must frame subsequent tool usage."""
+    """Return the authoritative system prompt text with dynamic documentation inserts."""
     try:
-        return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"System prompt file not found at {SYSTEM_PROMPT_PATH}. Ensure the repository is intact."
-        )
+        return _render_system_prompt(SYSTEM_PROMPT_PATH)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(str(exc)) from exc
     except Exception as exc:
-        raise RuntimeError(f"Failed to load system prompt: {exc}") from exc
+        raise RuntimeError(f"Failed to render system prompt: {exc}") from exc
 
 class SimulationInputs(BaseModel):
     """Parameters for Filecoin economic simulation. All fields are optional with intelligent defaults."""
@@ -107,7 +164,7 @@ class SimulationInputs(BaseModel):
     forecast_length_days: Annotated[
         Optional[int],
         Field(
-            description="""CRITICAL: Forecast duration in days. MUST match user's time horizon request!
+            description="""CRITICAL: Forecast duration in days. MUST match user's time horizon request (with one important exception described below).
             
             🚨 IMPORTANT: ALWAYS extract time horizon from user request and set this parameter accordingly!
             
@@ -123,12 +180,13 @@ class SimulationInputs(BaseModel):
             - "next 30 days" / "monthly" → forecast_length_days=30
             
             EXAMPLES OF USER REQUEST PARSING:
-            - "What will storage provider ROI be next year?" → SET forecast_length_days=365
+            - "What will storage provider ROI be next year?" → SET forecast_length_days=455 (365 + 90 day buffer for 1y_sector_roi)
             - "How will FIL supply change over 2 years?" → SET forecast_length_days=730  
             - "Show me network growth for next 6 months" → SET forecast_length_days=180
             - "Long-term sustainability over a decade" → SET forecast_length_days=3650
-            
-            ⚠️  CRITICAL RULE: If user specifies ANY time horizon (even implicitly), you MUST set forecast_length_days.
+            - Exception: When `requested_metric="1y_sector_roi"`, extend the user's requested window by +90 days so the trailing 365-day ROI covers the entire horizon (e.g., 180-day request → 270-day forecast).
+
+            ⚠️  CRITICAL RULE: If user specifies ANY time horizon (even implicitly), you MUST set forecast_length_days (apply the +90 day extension only for `1y_sector_roi`).
             Do NOT rely on default values when user has expressed a time preference!
             
             GUIDANCE: Shorter forecasts are more reliable. Uncertainty compounds over time.
@@ -159,6 +217,7 @@ class SimulationInputs(BaseModel):
             description="""Specific economic metric to return from simulation. RECOMMENDED to specify for focused analysis.
             
             DEFAULT: "1y_sector_roi" (annual return on investment for storage providers)
+            SPECIAL HANDLING: When requesting "1y_sector_roi", extend the forecast horizon by +90 days beyond the user's stated window so the rolling 365-day ROI metric includes the full period of interest.
             
             INVESTMENT METRICS:
             - "1y_sector_roi": Annual ROI for 32GiB sectors (0.15 = 15% return)
@@ -244,6 +303,7 @@ def simulate(sim: SimulationInputs) -> dict:
         - Default: 3650 days (10 years) - OFTEN TOO LONG!
         - Recommended: 90 (3 months), 365 (1 year), 1825 (5 years)
         - Note: Longer forecasts become less reliable due to compounding uncertainties
+        - Special handling: For `requested_metric="1y_sector_roi"`, extend the user's requested window by +90 days so the rolling 365-day ROI covers the full period of interest (e.g., 365-day request → 455-day forecast)
     
     sector_duration_days:
         - Units: Days  
@@ -255,6 +315,7 @@ def simulate(sim: SimulationInputs) -> dict:
         - Specify which economic metrics to return (recommended to focus analysis)
         - Default: "1y_sector_roi" (one-year return on investment for storage providers)
         - Examples: "available_supply", "network_QAP_EIB", "day_network_reward"
+        - Special handling: Only "1y_sector_roi" requires the +90 day horizon buffer; all other metrics should match the user's requested window exactly
         - Available metrics include 40+ economic and network indicators
     
     KEY OUTPUT METRICS EXPLAINED:

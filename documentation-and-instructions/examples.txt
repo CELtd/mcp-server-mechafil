@@ -94,9 +94,11 @@ ACTION:
 PROMPT: "What will storage provider ROI be next year?"
 
 TOOL: simulate({
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "1y_sector_roi"
 })
+
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 
 OUTPUT:
 {
@@ -181,18 +183,20 @@ ACTION: Note current onboarding is 3.38 EiB/day
 
 STEP 2 - Run baseline scenario:
 TOOL: simulate({
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "1y_sector_roi"
 })
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "1y_sector_roi": [0.18, 0.177, ..., 0.15], "Explanation": "..." }
 ACTION: Store baseline projection (18% → 15%)
 
 STEP 3 - Run high onboarding scenario:
 TOOL: simulate({
   "rbp": 8.0,
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "1y_sector_roi"
 })
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "1y_sector_roi": [0.18, 0.165, ..., 0.10], "Explanation": "..." }
 ACTION: Store high onboarding projection (18% → 10%)
 
@@ -212,17 +216,19 @@ ACTION: Note current FIL+ rate is 86%
 
 STEP 2 - Run baseline (current FIL+):
 TOOL: simulate({
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "1y_sector_roi"
 })
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "1y_sector_roi": [0.18, ..., 0.15], "Explanation": "..." }
 
 STEP 3 - Run low FIL+ scenario for ROI:
 TOOL: simulate({
   "fpr": 0.5,
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "1y_sector_roi"
 })
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "1y_sector_roi": [0.18, ..., 0.19], "Explanation": "..." }
 
 STEP 4 - Run low FIL+ scenario for network power:
@@ -267,25 +273,28 @@ ACTION: Define high growth and low growth e.g. +50% than baseline = 5.07 and -50
 STEP 2 - Run high growth scenario:
 TOOL: simulate({
   "rbp": 5.07,
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "1y_sector_roi"
 })
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "1y_sector_roi": [0.18, ..., 0.11], "Explanation": "..." }
 
 STEP 3 - Run low growth scenario:
 TOOL: simulate({
   "rbp": 1.69,
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "1y_sector_roi"
 })
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "1y_sector_roi": [0.18, ..., 0.17], "Explanation": "..." }
 
 STEP 4 - Get network capacity for high growth:
 TOOL: simulate({
   "rbp": 5.07,
-  "forecast_length_days": 365,
+  "forecast_length_days": 455,
   "requested_metric": "network_QAP_EIB"
 })
+NOTE: Although the user requested a 365-day forecast, the tool simulates 455 days to ensure the 1y_sector_roi metric (a rolling 365-day ROI) can be computed at the 1-year mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "network_QAP_EIB": [35.2, ..., 52.8], "Explanation": "..." }
 
 STEP 5 - Get network capacity for low growth:
@@ -465,9 +474,10 @@ ACTION: Note current conditions
 STEP 2 - Simulate ROI with user's FIL+ rate:
 TOOL: simulate({
   "fpr": 0.80,
-  "forecast_length_days": 730,
+  "forecast_length_days": 820,
   "requested_metric": "1y_sector_roi"
 })
+NOTE: Although the user requested a 730-day forecast, the tool simulates 820 days to ensure the 1y_sector_roi metric (a rolling 730-day ROI) can be computed at the 2-years mark. The additional 90 days provide the necessary trailing window for the calculation.
 OUTPUT: { "1y_sector_roi": [0.18, 0.177, ..., 0.16], "Explanation": "..." }
 
 STEP 3 - Get pledge requirements:

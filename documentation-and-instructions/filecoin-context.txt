@@ -1,5 +1,7 @@
 # Filecoin Economic Context
 
+Use the facts in this section as the authoritative knowledge base for economic interpretations; do not extend conclusions beyond what is documented here or supported by returned data.
+
 ## Network Overview
 - **Purpose**: Filecoin is a decentralized storage marketplace where providers earn FIL by proving storage capacity and serving client data.
 - **Incentive Model**: Block production probability scales with storage power, aligning network security with real storage contributions.
