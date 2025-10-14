@@ -164,7 +164,7 @@ class SimulationInputs(BaseModel):
     forecast_length_days: Annotated[
         Optional[int],
         Field(
-            description="""CRITICAL: Forecast duration in days. MUST match user's time horizon request (with one important exception described below).
+            description="""CRITICAL: Forecast duration in days. MUST match user's time horizon request.
             
             🚨 IMPORTANT: ALWAYS extract time horizon from user request and set this parameter accordingly!
             
@@ -180,13 +180,12 @@ class SimulationInputs(BaseModel):
             - "next 30 days" / "monthly" → forecast_length_days=30
             
             EXAMPLES OF USER REQUEST PARSING:
-            - "What will storage provider ROI be next year?" → SET forecast_length_days=455 (365 + 90 day buffer for 1y_sector_roi)
+            - "What will storage provider ROI be next year?" → SET forecast_length_days=365
             - "How will FIL supply change over 2 years?" → SET forecast_length_days=730  
             - "Show me network growth for next 6 months" → SET forecast_length_days=180
             - "Long-term sustainability over a decade" → SET forecast_length_days=3650
-            - Exception: When `requested_metric="1y_sector_roi"`, extend the user's requested window by +90 days so the trailing 365-day ROI covers the entire horizon (e.g., 180-day request → 270-day forecast).
 
-            ⚠️  CRITICAL RULE: If user specifies ANY time horizon (even implicitly), you MUST set forecast_length_days (apply the +90 day extension only for `1y_sector_roi`).
+            ⚠️  CRITICAL RULE: If user specifies ANY time horizon (even implicitly), you MUST set forecast_length_days accordingly.
             Do NOT rely on default values when user has expressed a time preference!
             
             GUIDANCE: Shorter forecasts are more reliable. Uncertainty compounds over time.
@@ -217,7 +216,6 @@ class SimulationInputs(BaseModel):
             description="""Specific economic metric to return from simulation. RECOMMENDED to specify for focused analysis.
             
             DEFAULT: "1y_sector_roi" (annual return on investment for storage providers)
-            SPECIAL HANDLING: When requesting "1y_sector_roi", extend the forecast horizon by +90 days beyond the user's stated window so the rolling 365-day ROI metric includes the full period of interest.
             
             INVESTMENT METRICS:
             - "1y_sector_roi": Annual ROI for 32GiB sectors (0.15 = 15% return)
@@ -303,7 +301,6 @@ def simulate(sim: SimulationInputs) -> dict:
         - Default: 3650 days (10 years) - OFTEN TOO LONG!
         - Recommended: 90 (3 months), 365 (1 year), 1825 (5 years)
         - Note: Longer forecasts become less reliable due to compounding uncertainties
-        - Special handling: For `requested_metric="1y_sector_roi"`, extend the user's requested window by +90 days so the rolling 365-day ROI covers the full period of interest (e.g., 365-day request → 455-day forecast)
     
     sector_duration_days:
         - Units: Days  
@@ -315,7 +312,6 @@ def simulate(sim: SimulationInputs) -> dict:
         - Specify which economic metrics to return (recommended to focus analysis)
         - Default: "1y_sector_roi" (one-year return on investment for storage providers)
         - Examples: "available_supply", "network_QAP_EIB", "day_network_reward"
-        - Special handling: Only "1y_sector_roi" requires the +90 day horizon buffer; all other metrics should match the user's requested window exactly
         - Available metrics include 40+ economic and network indicators
     
     KEY OUTPUT METRICS EXPLAINED:

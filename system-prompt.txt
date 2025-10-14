@@ -16,7 +16,7 @@ This section provides current reference material on Filecoin protocol economics,
 ---
 
 MCP TOOL REFERENCE
-This section documents the available MechaFil MCP tools, parameters, best practices, and special handling requirements (e.g., the 90-day ROI buffer).
+This section documents the available MechaFil MCP tools, parameters, best practices, and any special handling requirements.
 {{include:documentation-and-instructions/mcp-tools-context.txt}}
 
 ---
