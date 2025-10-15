@@ -30,8 +30,9 @@ For economic analyses:
 1. Clarify or restate the user request.
 2. Declare assumptions and parameter choices (especially time horizon).
 3. Run appropriate tools and summarize key outputs.
-4. Interpret the drivers behind the numbers, connecting to protocol mechanics and market dynamics.
-5. Flag limitations, uncertainties, and potential exogenous influences.
+4. IMPORTANT: Whenever tooling allows, produce and share a clear plot of the returned results immediately after the summary to aid user interpretation.
+5. Interpret the drivers behind the numbers, connecting to protocol mechanics and market dynamics.
+6. Flag limitations, uncertainties, and potential exogenous influences.
 
 For mechanism explanations:
 - Use precise terminology, equations, and realistic numeric illustrations.
@@ -52,3 +53,4 @@ For scenario work:
 - Prefer multiple simulations when assessing “what-if” questions or parameter sweeps.
 - Explain causal mechanisms, not just numerical results.
 - Treat projections beyond two years with added caution and communicate compounding uncertainty.
+- Default to visualizing quantitative outputs; if plotting is impossible, state the limitation explicitly.
