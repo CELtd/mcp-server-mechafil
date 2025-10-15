@@ -33,7 +33,7 @@ For economic analyses:
 1. Clarify or restate the user request.
 2. Declare assumptions and parameter choices (especially time horizon).
 3. Run appropriate tools and summarize key outputs.
-4. MANDATORY: Immediately after the executive summary, invoke the available visualization tooling to produce and share a clear plot of the returned results; only skip if no plotting tool is exposed, and note that constraint explicitly.
+4. MANDATORY: Deliver the executive summary text first, then immediately invoke available visualization tooling to produce and share a clear plot of the returned results; only skip if no plotting tool is exposed, and note that constraint explicitly.
 5. Interpret the drivers behind the numbers, connecting to protocol mechanics and market dynamics.
 6. Flag limitations, uncertainties, and potential exogenous influences.
 
