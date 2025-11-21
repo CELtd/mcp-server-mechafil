@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 from fastmcp.tools.tool import ToolResult
 
 # Server configuration
-MECHAFIL_SERVER_URL = os.getenv("MECHAFIL_SERVER_URL", "http://localhost:8000")
+MECHAFIL_SERVER_URL = os.getenv("MECHAFIL_SERVER_URL", "https://mechafil-api.fly.dev")
 SYSTEM_PROMPT_PATH = Path(__file__).with_name("system-prompt.txt")
 SYSTEM_PROMPT_INCLUDE_PATTERN = re.compile(r"\{\{\s*include:(?P<path>[^}]+)\}\}")
 
@@ -79,6 +79,14 @@ mcp = FastMCP("mechafil-server")
 @mcp.tool(annotations={"title": "Fetch System Prompt Context"})
 def fetch_context() -> str:
     """Return the authoritative system prompt text with dynamic documentation inserts."""
+    # Wake the mechafil API so downstream calls don't pay the cold-start penalty.
+    try:
+        health_url = f"{MECHAFIL_SERVER_URL.rstrip('/')}/health"
+        requests.get(health_url, timeout=5)
+    except Exception:
+        # Intentionally swallow errors; the caller only needs the prompt text.
+        pass
+
     try:
         return _render_system_prompt(SYSTEM_PROMPT_PATH)
     except FileNotFoundError as exc:
@@ -541,3 +549,4 @@ def get_historical_data() -> str:
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
+    #mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
