@@ -1,0 +1,30 @@
+# Fly.io Configuration for MechaFil MCP Server
+
+app = "mechafil-mcp-server"
+primary_region = "fra"
+
+# Build configuration
+[build]
+  dockerfile = "Dockerfile"
+
+# Environment variables
+[env]
+  MCP_TRANSPORT = "http"
+  PORT = "8080"
+  MECHAFIL_SERVER_URL = "https://mechafil-api.fly.dev"
+
+# HTTP service configuration - serverless MCP server
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"  # Scale to zero when idle
+  auto_start_machines = true   # Start on incoming request
+  min_machines_running = 0     # True serverless
+
+  # No health checks - allows faster auto-stop when idle
+
+# VM configuration
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -548,5 +548,11 @@ def get_historical_data() -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
-    #mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
+    import os
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+
+    if transport == "http":
+        port = int(os.getenv("PORT", "8080"))
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+    else:
+        mcp.run(transport="stdio")
