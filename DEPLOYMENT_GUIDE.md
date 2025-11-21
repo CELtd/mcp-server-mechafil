@@ -35,13 +35,13 @@ The deployment consists of two independent serverless applications on Fly.io:
 │  │  - simulate() tool                                        │  │
 │  │  - get_historical_data() tool                             │  │
 │  └─────────────────────┬─────────────────────────────────────┘  │
-│                        │                                         │
-│  Fly.io Machine:      │ Makes HTTP calls                        │
-│  - Auto-start: true   │                                         │
-│  - Auto-stop: true    │                                         │
-│  - Min machines: 0    │                                         │
-│  - 512MB RAM, 1 CPU   │                                         │
-└────────────────────────┼─────────────────────────────────────────┘
+│                        │                                        │
+│  Fly.io Machine:       │ Makes HTTP calls                       │
+│  - Auto-start: true    │                                        │
+│  - Auto-stop: true     │                                        │
+│  - Min machines: 0     │                                        │
+│  - 512MB RAM, 1 CPU    │                                        │
+└────────────────────────┼────────────────────────────────────────┘
                          │
                          │ HTTPS
                          ▼
@@ -54,24 +54,24 @@ The deployment consists of two independent serverless applications on Fly.io:
 │  │  - /simulate - Run Filecoin simulations                   │  │
 │  │  - /admin/update-cache - Trigger cache refresh            │  │
 │  └─────────────────────┬─────────────────────────────────────┘  │
-│                        │                                         │
-│                        ▼                                         │
+│                        │                                        │
+│                        ▼                                        │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Persistent Volume: /data/shared-cache (3GB)             │  │
+│  │  Persistent Volume: /data/shared-cache (3GB)              │  │
 │  │  - DiskCache storage                                      │  │
 │  │  - Survives machine restarts                              │  │
 │  └───────────────────────────────────────────────────────────┘  │
-│                                                                   │
-│  Fly.io Machine:                                                 │
-│  - Auto-start: true                                              │
-│  - Auto-stop: true                                               │
-│  - Min machines: 0                                               │
-│  - 2GB RAM, 2 CPUs                                               │
-│  - Volume attached: shared_cache (3GB)                           │
+│                                                                 │
+│  Fly.io Machine:                                                │
+│  - Auto-start: true                                             │
+│  - Auto-stop: true                                              │
+│  - Min machines: 0                                              │
+│  - 2GB RAM, 2 CPUs                                              │
+│  - Volume attached: shared_cache (3GB)                          │
 └───────────────────────────────────────────────────────────────┬─┘
-                                                                  │
-                                                                  │ Fetches data
-                                                                  ▼
+                                                                │
+                                                                │ Fetches data
+                                                                ▼
                                                           Spacescope API
                                                           (Filecoin data)
 ```
