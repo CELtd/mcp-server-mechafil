@@ -552,7 +552,44 @@ if __name__ == "__main__":
     transport = os.getenv("MCP_TRANSPORT", "stdio")
 
     if transport == "http":
+        from starlette.responses import Response
+        from starlette.routing import Route
+
         port = int(os.getenv("PORT", "8080"))
-        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+
+        # Get the HTTP app
+        app = mcp.http_app()
+
+        # Add CORS preflight handler
+        async def handle_cors_preflight(request):
+            return Response(
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Expose-Headers": "mcp-session-id",
+                    "Access-Control-Max-Age": "86400",
+                }
+            )
+
+        # Insert CORS route at the beginning
+        app.routes.insert(0, Route("/mcp", handle_cors_preflight, methods=["OPTIONS"]))
+
+        # Add CORS headers to all responses via middleware
+        from starlette.middleware.base import BaseHTTPMiddleware
+
+        class CORSHeaderMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request, call_next):
+                response = await call_next(request)
+                response.headers["Access-Control-Allow-Origin"] = "*"
+                response.headers["Access-Control-Expose-Headers"] = "mcp-session-id"
+                return response
+
+        app.add_middleware(CORSHeaderMiddleware)
+
+        # Run with uvicorn
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=port)
     else:
         mcp.run(transport="stdio")
