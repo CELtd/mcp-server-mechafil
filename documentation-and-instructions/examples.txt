@@ -78,8 +78,8 @@ OUTPUT:
 
 ACTION:
 1. Parse the JSON response
-2. Extract data["raw_byte_power_averaged_over_previous_30days"] = 3.38
-3. Optionally extract data["raw_byte_power"] to show trend
+2. Extract data["raw_byte_power_averaged_over_previous_30days"] = 3.38 (onboarding rate)
+3. Optionally extract data["raw_byte_power"] to show onboarding-rate trend (EiB/day), not total power
 4. Respond: "The recent onboarding rate is 3.38 EiB/day (30-day average). Looking at the weekly trend,
    it has been gradually increasing from 2.8 to 3.38 EiB/day over the past few weeks."
 ```
@@ -332,7 +332,7 @@ OUTPUT:
 
 ACTION:
 1. Parse the response
-2. Extract data["renewal_rate"] array (Monday values over ~52 weeks)
+2. Extract data["renewal_rate"] array (Monday values; anchor with data["hist_window_start_date"]/data["hist_window_end_date"])
 3. Analyze trend: ...."
 ```
 
@@ -354,7 +354,7 @@ OUTPUT:
 
 ACTION:
 1. Parse the response
-2. Extract data["historical_raw_power_eib"] and data["historical_qa_power_eib"]
+2. Extract data["historical_raw_power_eib"] and data["historical_qa_power_eib"] (total power, not rates)
 3. Calculate RBP growth: ...
 4. Calculate QAP growth: ...
 5. Calculate QAP/RBP ratio: ...

@@ -4,15 +4,52 @@
 
 ### `get_historical_data`
 - **Endpoint**: `/historical-data`
-- **Purpose**: Retrieve real-world Filecoin network data from mainnet launch to the latest cached date (typically three days behind).
+- **Purpose**: Retrieve cached Filecoin network data with explicit date metadata for anchoring arrays.
 - **Response**: JSON string containing a `data` dictionary with:
   - 30-day medians (`raw_byte_power_averaged_over_previous_30days`, `renewal_rate_averaged_over_previous_30days`, `filplus_rate_averaged_over_previous_30days`).
   - Historical Monday-sampled series (`raw_byte_power`, `renewal_rate`, `filplus_rate`, `historical_raw_power_eib`, `historical_qa_power_eib`, etc.).
   - Offline model vectors used to seed simulations (scheduled expiries, pledge releases, burn history).
+  - Date metadata:
+    - `data_start_date` / `data_end_date`: overall historical span for the cached dataset.
+    - `hist_window_start_date` / `hist_window_end_date` / `hist_window_days`: window for `raw_byte_power`, `renewal_rate`, `filplus_rate` (currently ~last 180 days).
+  - Field aliases and metadata:
+    - `raw_byte_power_onboarded_eib_per_day`: alias of `raw_byte_power`.
+    - `network_raw_power_eib`: alias of `historical_raw_power_eib`.
+    - `network_qa_power_eib`: alias of `historical_qa_power_eib`.
+    - `field_meta`: per-field units and type (flow/stock/rate).
+- **Field Map (flow vs stock)**:
+  - **Flow / rates (use for onboarding trends or simulation defaults):**
+    - `raw_byte_power` = onboarding rate (EiB/day), not total power.
+    - `renewal_rate` = fraction of expiring power renewed.
+    - `filplus_rate` = fraction of onboarding that is FIL+.
+  - **Stock / totals (use for network power levels):**
+    - `historical_raw_power_eib` = total RBP on network.
+    - `historical_qa_power_eib` = total QAP on network.
+- **Field Dictionary (units + intent)**:
+  - `raw_byte_power`: EiB/day, onboarding flow (not total power).
+  - `renewal_rate`: fraction (0..1), renewal flow rate.
+  - `filplus_rate`: fraction (0..1), FIL+ share of onboarding.
+  - `historical_raw_power_eib`: EiB, total network RBP (stock).
+  - `historical_qa_power_eib`: EiB, total network QAP (stock).
+  - `raw_byte_power_averaged_over_previous_30days`: EiB/day, recent onboarding median.
+  - `renewal_rate_averaged_over_previous_30days`: fraction, recent renewal median.
+  - `filplus_rate_averaged_over_previous_30days`: fraction, recent FIL+ median.
 - **Typical Uses**:
   - Establish current network conditions and default parameters.
   - Describe historical trends and context for simulations.
   - Validate user assumptions against empirical data.
+  - **Interpretation**: Use `hist_window_*` for `raw_byte_power`/`renewal_rate`/`filplus_rate` and `data_*` for other arrays; do not infer dates from indices alone.
+  - **Common Pitfall**: Do not describe `raw_byte_power` as “network power”; it is a rate, not a total.
+  - **Do/Don’t**:
+    - Do use `historical_raw_power_eib` / `historical_qa_power_eib` for “network power”.
+    - Do use `raw_byte_power` only for onboarding-rate narratives.
+    - Don’t compute “RBP level” from `raw_byte_power` without integrating it.
+    - Don’t mix rate series and stock series in the same chart without labeling units.
+  - **Ambiguity Rule**:
+    - If the user says “raw byte power” or “network power”, use historical data, not simulation outputs.
+    - Interpret “raw byte power” as total power (`historical_raw_power_eib`, EiB).
+    - Interpret “onboarding rate” explicitly as `raw_byte_power` (EiB/day).
+    - If unclear, ask: “Do you mean total power (EiB) or onboarding rate (EiB/day)?”
 
 ### `simulate`
 - **Endpoint**: `/simulate`
@@ -26,6 +63,12 @@
   - `sector_duration_days`: Average sector lifetime (default 540).
   - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`.
 - **Response**: Dictionary with the requested metric array (Monday values) and an `Explanation` summarizing the actual inputs after defaults were applied.
+- **Output Interpretation (units + type)**:
+  - **Power (stock)**: `network_RBP_EIB`, `network_QAP_EIB`, `capped_power_EIB` → total power (EiB).
+  - **Supply (stock)**: `available_supply`, `circ_supply`, `network_locked` → FIL totals.
+  - **Rewards/flows**: `day_network_reward`, `day_rewards_per_sector`, `day_pledge_per_QAP` → per-day rates.
+  - **ROI**: `1y_sector_roi` is a ratio (0.15 = 15% annual ROI).
+  - **Time axis**: arrays are Monday-sampled; use the forecast horizon for dates.
 - **Usage Patterns**:
   - Single-run forecasts for direct projections.
   - Baseline plus scenario comparisons to evaluate parameter sensitivity.
@@ -33,6 +76,7 @@
 
 ## Tooling Best Practices
 - **Time Horizon Discipline**: Always infer or elicit user timeframes and set `forecast_length_days` explicitly; avoid relying on the 10-year default.
+- **Common Mappings**: 30d≈1 month, 90d≈3 months, 180d≈6 months, 365d≈1 year, 730d≈2 years, 1825d≈5 years, 3650d≈10 years.
 - **Baseline Establishment**: Start complex analyses with `get_historical_data` to anchor parameters and explain current state before simulating futures.
 - **Parameter Validation**: Flag unrealistic inputs (e.g., renewal rates outside 0–1, extreme RBP values) and discuss implications before executing.
 - **Metric Precision**: Use the exact metric identifiers returned by the API (e.g., `"network_QAP_EIB"` instead of legacy names) to avoid call failures.

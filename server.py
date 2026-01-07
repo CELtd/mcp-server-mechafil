@@ -100,148 +100,49 @@ class SimulationInputs(BaseModel):
     rbp: Annotated[
         Optional[Union[float, List[float]]],
         Field(
-            description="""Raw Byte Power onboarding rate in EiB/day (Exbibytes per day).
-            
-            MEANING: Daily rate of new physical storage capacity added to the Filecoin network.
-            DEFAULT: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
-            
-            EXAMPLES:
-            - 2.0 = Conservative growth scenario
-            - 5.0 = Aggressive expansion scenario  
-            - [3.0, 4.0, 5.0, 4.0] = Time-varying growth pattern (requires array length = forecast_length_days)
-            
-            CONTEXT: Higher onboarding = faster network growth, more competition for rewards, potentially lower per-sector returns.
-            Lower onboarding = network stagnation risk, higher individual rewards."""
+            description="""Raw Byte Power onboarding in EiB/day. Float for constant or list for time-varying (len = forecast_length_days). Defaults to recent median if omitted."""
         )
     ] = None
 
     rr: Annotated[
         Optional[Union[float, List[float]]],
         Field(
-            description="""Sector renewal rate as fraction 0.0-1.0 (0%=all sectors expire, 100%=all renewed).
-            
-            MEANING: When storage sectors reach end-of-life, what fraction get renewed vs. leaving network.
-            DEFAULT: Derived from recent network data and its value is reported in the explaination of the results of the simulation. 
-            
-            EXAMPLES:
-            - 0.9 = Very high retention, stable network
-            - 0.7 = Moderate churn, opportunity for new providers
-            - [0.8, 0.85, 0.9] = Improving retention over time
-            
-            IMPACT: High renewal = network stability, predictable capacity.
-            Low renewal = more churn, network capacity volatility, opportunity for new onboarding."""
+            description="""Renewal rate (0..1). Float or list (len = forecast_length_days). Defaults to recent median if omitted."""
         )
     ] = None
 
     fpr: Annotated[
         Optional[Union[float, List[float]]],
         Field(
-            description="""FIL+ verified deals rate as fraction 0.0-1.0 (0%=no FIL+, 100%=all verified).
-            
-            MEANING: Fraction of new storage deals that qualify for FIL+ verified data program.
-            DEFAULT: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
-            
-            EXAMPLES:
-            - 0.95 = Very high verified data adoption
-            - 0.5 = Mixed use cases (verified + regular storage)
-            - [0.8, 0.85, 0.9] = Growing verified data adoption
-            
-            CRITICAL: FIL+ deals get 10x quality multiplier, dramatically increasing rewards.
-            Higher FIL+ rate = higher total rewards but more competition for verified deals."""
+            description="""FIL+ rate (0..1). Float or list (len = forecast_length_days). Defaults to recent median if omitted."""
         )
     ] = None
 
     lock_target: Annotated[
         Optional[Union[float, List[float]]],
         Field(
-            description="""Target consensus pledge ratio as fraction 0.0-1.0 of circulating supply.
-            
-            MEANING: Target percentage of all circulating FIL tokens to be locked as consensus pledge collateral.
-            DEFAULT: 0.3 (30% of supply locked as pledge)
-            
-            EXAMPLES:
-            - 0.2 = Lower capital requirements (20% locked)
-            - 0.4 = Higher capital requirements (40% locked) 
-            - Typically kept constant, rarely time-varying
-            
-            IMPACT: Higher lock_target = more FIL locked away, potentially higher token scarcity and price pressure,
-            but also higher capital requirements for storage providers."""
+            description="""Target lock ratio (0..1). Float or list (len = forecast_length_days). Default 0.3."""
         )
     ] = None
 
     forecast_length_days: Annotated[
         Optional[int],
         Field(
-            description="""CRITICAL: Forecast duration in days. MUST match user's time horizon request.
-            
-            🚨 IMPORTANT: ALWAYS extract time horizon from user request and set this parameter accordingly!
-            
-            DEFAULT: 3650 days (10 years) - USUALLY TOO LONG AND WRONG FOR USER REQUESTS
-            
-            USER REQUEST MAPPING (PAY CLOSE ATTENTION):
-            - "next 3 months" / "quarterly" → forecast_length_days=90
-            - "next 6 months" → forecast_length_days=180  
-            - "next year" / "annually" / "over the year" → forecast_length_days=365
-            - "next 2 years" → forecast_length_days=730
-            - "next 5 years" / "medium-term" → forecast_length_days=1825
-            - "next decade" / "long-term" → forecast_length_days=3650
-            - "next 30 days" / "monthly" → forecast_length_days=30
-            
-            EXAMPLES OF USER REQUEST PARSING:
-            - "What will storage provider ROI be next year?" → SET forecast_length_days=365
-            - "How will FIL supply change over 2 years?" → SET forecast_length_days=730  
-            - "Show me network growth for next 6 months" → SET forecast_length_days=180
-            - "Long-term sustainability over a decade" → SET forecast_length_days=3650
-
-            ⚠️  CRITICAL RULE: If user specifies ANY time horizon (even implicitly), you MUST set forecast_length_days accordingly.
-            Do NOT rely on default values when user has expressed a time preference!
-            
-            GUIDANCE: Shorter forecasts are more reliable. Uncertainty compounds over time.
-            Most business analysis needs 1-2 years maximum."""
+            description="""Forecast horizon in days. Always set explicitly from the user's time horizon; default is 3650 (10 years)."""
         )
     ] = None
 
     sector_duration_days: Annotated[
         Optional[int],
         Field(
-            description="""Average lifetime of storage sectors before natural expiration.
-            
-            MEANING: How long storage commitments last before they naturally expire (if not renewed).
-            DEFAULT: 540 days (~18 months)
-            
-            EXAMPLES:
-            - 360 days = 1-year commitments (shorter, more flexible)
-            - 720 days = 2-year commitments (longer, more stable)
-            
-            IMPACT: Longer duration = less frequent renewal decisions, more predictable network capacity.
-            Shorter duration = more flexibility but higher administrative overhead for providers."""
+            description="""Average sector duration in days (default 540)."""
         )
     ] = None
 
     requested_metric: Annotated[
         Optional[str],
         Field(
-            description="""Specific economic metric to return from simulation. RECOMMENDED to specify for focused analysis.
-            
-            DEFAULT: "1y_sector_roi" (annual return on investment for storage providers)
-            
-            INVESTMENT METRICS:
-            - "1y_sector_roi": Annual ROI for 32GiB sectors (0.15 = 15% return)
-            - "1y_return_per_sector": Annual FIL earnings per 32GiB sector
-            - "day_rewards_per_sector": Daily FIL earnings per sector
-            - "day_pledge_per_QAP": Collateral required per PiB of storage
-            
-            SUPPLY METRICS:
-            - "available_supply": FIL tokens available for trading (excludes locked)
-            - "circ_supply": Total circulating FIL supply (includes locked tokens)
-            - "network_locked": Total FIL locked as collateral
-            
-            NETWORK METRICS:
-            - "network_QAP_EIB": Total quality-adjusted storage power (EiB)
-            - "network_RBP_EIB": Total raw storage capacity (EiB)
-            - "day_network_reward": Daily block rewards to all providers (FIL/day)
-            
-            USAGE: Specify one metric for focused analysis. Leave None for default ROI analysis."""
+            description="""Metric name to return (default '1y_sector_roi')."""
         )
     ] = None
 
@@ -250,128 +151,9 @@ class SimulationInputs(BaseModel):
 def simulate(sim: SimulationInputs) -> dict:
     """CALL FETCH_context before using this tool.
 
-    Run sophisticated economic forecasts of the Filecoin network using the MechaFil digital twin.
-    
-    PURPOSE:
-    This function provides access to MechaFil, a sophisticated economic simulation engine that models
-    the complex dynamics of the Filecoin decentralized storage network. It acts as a "digital twin"
-    of the Filecoin economy, enabling users to forecast future network states, analyze economic
-    scenarios, and evaluate the impact of different growth trajectories.
-    
-    CONTEXT - What MechaFil Simulates:
-    The simulation models the intricate relationships between:
-    - Storage Power Dynamics: How raw storage and quality-adjusted power evolve
-    - Token Economics: FIL minting, supply dynamics, and circulation patterns  
-    - Consensus Mechanisms: Block rewards and storage power-based leader election
-    - Pledge Economics: Collateral requirements and FIP-81 consensus pledge smoothing
-    - Market Forces: Storage deals, sector renewals, and FIL+ program effects
-    - Network Growth: Onboarding rates, sector lifetimes, and capacity expansion
-    
-    WHEN TO USE THIS TOOL:
-    - Economic Forecasting: "What will FIL supply look like in 2 years?"
-    - Investment Analysis: "What returns can storage providers expect?"
-    - Policy Impact: "How would changing pledge requirements affect the network?"
-    - Scenario Planning: "What if onboarding rates double next year?"
-    - Network Health: "Is the current trajectory sustainable long-term?"
-    - Comparative Analysis: "How do different growth scenarios compare?"
-    
-    INPUT PARAMETERS (all optional with intelligent defaults):
-    
-    rbp (Raw Byte Power): 
-        - Units: EiB/day (Exbibytes per day)
-        - Meaning: Rate of new storage capacity added to network daily
-        - Default: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
-        - Example: 5.0 = aggressive growth, 2.0 = slower growth
-        - Can be: Single value (constant) or array (time-varying scenario)
-    
-    rr (Renewal Rate):
-        - Units: Ratio 0-1 (0=0%, 1=100%)  
-        - Meaning: Fraction of expiring sectors that get renewed vs. leaving network
-        - Default: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
-        - Example: 0.9 = very high retention, 0.7 = moderate churn
-        - Impact: Higher renewal = more stable network, lower new onboarding needs
-    
-    fpr (FIL+ Rate):
-        - Units: Ratio 0-1 (0=0%, 1=100%)
-        - Meaning: Fraction of new storage that qualifies for FIL+ verified deals
-        - Default: Derived from recent network data and its value is reported in the explaination of the results of the simulation.
-        - Impact: FIL+ deals get 10x quality multiplier, boosting rewards significantly
-        - Example: 0.95 = very high verified data, 0.5 = mixed use case
-    
-    lock_target:
-        - Units: Ratio 0-1 (0=0%, 1=100%)
-        - Meaning: Target fraction of circulating supply to lock as consensus pledge
-        - Default: 0.3 (30% target locking ratio)
-        - Impact: Higher = more capital requirements, potentially higher token scarcity
-    
-    forecast_length_days:
-        - Units: Days
-        - Default: 3650 days (10 years) - OFTEN TOO LONG!
-        - Recommended: 90 (3 months), 365 (1 year), 1825 (5 years)
-        - Note: Longer forecasts become less reliable due to compounding uncertainties
-    
-    sector_duration_days:
-        - Units: Days  
-        - Meaning: Average lifetime of storage sectors before expiration
-        - Default: 540 days (~18 months)
-        - Impact: Longer duration = less renewal churn, more predictable network
-    
-    requested_metric:
-        - Specify which economic metrics to return (recommended to focus analysis)
-        - Default: "1y_sector_roi" (one-year return on investment for storage providers)
-        - Examples: "available_supply", "network_QAP_EIB", "day_network_reward"
-        - Available metrics include 40+ economic and network indicators
-    
-    KEY OUTPUT METRICS EXPLAINED:
-    
-    Economic Indicators:
-    - available_supply: FIL tokens available for market circulation (excludes locked)
-    - circ_supply: Total circulating FIL supply (includes locked tokens)
-    - day_network_reward: Daily block rewards paid to storage providers (FIL/day)
-    - network_locked: Total FIL locked as collateral by storage providers
-    - 1y_sector_roi: Annual return on investment for 32GiB storage sectors (ratio)
-    - 1y_return_per_sector: Annual FIL earnings per 32GiB sector
-    
-    Network Power Metrics:
-    - network_RBP_EIB: Total raw byte storage power on network (EiB)
-    - network_QAP_EIB: Total quality-adjusted power including FIL+ multipliers (EiB)
-    - capped_power_EIB: Network power used for baseline minting calculations (EiB)
-    
-    Investment Analytics:
-    - day_pledge_per_QAP: Required collateral per unit of power (FIL/PiB)
-    - day_rewards_per_sector: Daily earnings per 32GiB sector (FIL/day)
-    
-    OUTPUT FORMAT:
-    Returns dictionary with structure:
-    {
-        "1y_sector_roi": [0.187, 0.189, 0.191, ...],  // Monday-sampled values (weekly)
-        "Explanation": "Results of a Filecoin simulation with the following input values: Raw byte power (rbp) onboarded: 2.36, Renewal rate (rr): 0.82, Filplus deals rate (fpr): 0.74"
-    }
-
-    Note: The MCP server transforms the mechafil-server response from:
-      {"input": {...}, "simulation_output": {...}}
-    to this simplified format with just the requested metric and explanation.
-
-    The output array represents time series data, with each value corresponding to a Monday
-    in the forecast period (weekly sampling for efficient data transfer).
-    
-    INTERPRETATION GUIDANCE:
-    - ROI values: 0.15 = 15% annual return, 0.25 = 25% return
-    - Supply trends: Increasing = inflationary, decreasing = deflationary pressure
-    - Reward patterns: Declining over time due to halvening-like economics
-    
-    
-    LIMITATIONS:
-    - Assumes rational economic behavior and stable protocol rules
-    - Cannot predict external market shocks or major protocol changes
-    - Longer forecasts have higher uncertainty due to compounding assumptions
-    - Does not model competitor networks or regulatory changes
-    
-    Args:
-        sim: SimulationInputs containing forecast parameters (all optional)
-        
-    Returns:
-        dict: Simulation results with specified output metric and a detailed explaination of the parameters that are used during this simulation. IMPORTANT: read always the explaination
+    Run a MechaFil simulation via `/simulate` and return a single metric series
+    (Monday-sampled) plus an `Explanation` that reflects the actual inputs used.
+    Use `requested_metric` to filter outputs; defaults come from historical data.
     """
     # Build request payload, excluding None values
     payload = {}
@@ -416,11 +198,19 @@ def simulate(sim: SimulationInputs) -> dict:
         raise ValueError("No input data found in response")
 
     # Build explanation string with actual values
+    def _format_input(value: Any) -> str:
+        if isinstance(value, dict) and value.get("type") == "array":
+            length = value.get("length")
+            first = value.get("first")
+            last = value.get("last")
+            return f"array(len={length}, first={first}, last={last})"
+        return str(value)
+
     output_explanation_text = (
         "Results of a Filecoin simulation with the following input values: " +
-        f"Raw byte power (rbp) onboarded: {input_data.get('raw_byte_power')}, " +
-        f"Renewal rate (rr): {input_data.get('renewal_rate')}, " +
-        f"Filplus deals rate (fpr): {input_data.get('filplus_rate')}"
+        f"Raw byte power (rbp) onboarded: {_format_input(input_data.get('raw_byte_power'))}, " +
+        f"Renewal rate (rr): {_format_input(input_data.get('renewal_rate'))}, " +
+        f"Filplus deals rate (fpr): {_format_input(input_data.get('filplus_rate'))}"
     )
 
     return {
@@ -433,91 +223,8 @@ def simulate(sim: SimulationInputs) -> dict:
 def get_historical_data() -> str:
     """CALL FETCH_context before using this tool.
 
-    Get historical Filecoin network data for analysis and simulation initialization.
-    
-    PURPOSE:
-    This function retrieves real-world historical data from the Filecoin blockchain network,
-    which serves as the foundation for understanding current network state and initializing
-    economic simulations. The data spans from Filecoin mainnet launch (Oct 15, 2020) to
-    the most recent available data (typically 3 days behind current date).
-    
-    CONTEXT - Why Use This:
-    - Analyze historical trends in Filecoin network growth and economics
-    - Understand current network state (power, supply, rewards, pledge requirements)
-    - Get baseline parameters for running economic forecasts
-    - Research storage provider economics and network health over time
-    - Extract default parameters that reflect recent network behavior
-    
-    DATA INCLUDED:
-    The response contains a single "data" object with all historical information:
-
-    1. AVERAGED METRICS (30-day medians, with descriptive field names):
-       - raw_byte_power_averaged_over_previous_30days: Recent onboarding rate (EiB/day)
-       - renewal_rate_averaged_over_previous_30days: Recent renewal rate (0-1)
-       - filplus_rate_averaged_over_previous_30days: Recent FIL+ adoption (0-1)
-
-    2. HISTORICAL TIME SERIES (Monday-downsampled arrays):
-       - raw_byte_power: Weekly onboarding rates [2.1, 2.4, 2.8, ...]
-       - renewal_rate: Weekly renewal rates [0.75, 0.78, 0.81, ...]
-       - filplus_rate: Weekly FIL+ adoption [0.82, 0.84, 0.85, ...]
-
-    3. OFFLINE MODEL DATA (initialization parameters, scalars and arrays):
-       - rb_power_zero: Initial raw byte power (PiB)
-       - qa_power_zero: Initial quality-adjusted power (PiB)
-       - circ_supply_zero: Initial circulating FIL supply
-       - locked_fil_zero: Initial locked FIL amount
-       - historical_raw_power_eib: Historical RBP array (Monday values)
-       - historical_qa_power_eib: Historical QAP array (Monday values)
-       - rb_known_scheduled_expire_vec: Scheduled RBP expirations
-       - qa_known_scheduled_expire_vec: Scheduled QAP expirations
-       - known_scheduled_pledge_release_full_vec: Scheduled pledge releases
-       - burnt_fil_vec: Historical cumulative gas burn
-       - And many more fields for complete simulation initialization
-
-    All data fields are contained in a single flat "data" dictionary for easy access.
-    
-    OUTPUT FORMAT:
-    Returns JSON string with structure:
-    {
-        "data": {
-            // 30-day smoothed metrics (scalars)
-            "raw_byte_power_averaged_over_previous_30days": 3.38,
-            "renewal_rate_averaged_over_previous_30days": 0.83,
-            "filplus_rate_averaged_over_previous_30days": 0.86,
-
-            // Historical time series (Monday values only - weekly sampling)
-            "raw_byte_power": [2.1, 2.4, 2.8, ...],
-            "renewal_rate": [0.75, 0.78, 0.81, ...],
-            "filplus_rate": [0.82, 0.84, 0.85, ...],
-
-            // Offline model data (scalars and Monday-downsampled arrays)
-            "rb_power_zero": 1234.56,
-            "qa_power_zero": 2345.67,
-            "circ_supply_zero": 123456789.12,
-            "locked_fil_zero": 45678901.23,
-            "historical_raw_power_eib": [12.5, 13.1, ...],
-            "historical_qa_power_eib": [45.2, 46.1, ...],
-            // ... all other historical data fields in a single flat dictionary
-        }
-    }
-
-    Note: The mechafil-server now returns all data in a single "data" object using the
-    FetchDataResults container class, with Monday-downsampled arrays for efficiency.
-    
-    TYPICAL USE CASES:
-    - "What's the current state of the Filecoin network?"
-    - "How has storage onboarding changed over time?"
-    - "What are typical renewal rates for storage providers?"
-    - "Get baseline parameters for running a forecast simulation"
-    - "Analyze historical FIL+ program adoption"
-    
-    PERFORMANCE:
-    - Response time: ~1-2 seconds (cached data)
-    - Data size: ~50KB (weekly downsampling reduces size)
-    - Updates: Daily refresh at 02:00 UTC
-    
-    Returns:
-        str: JSON string containing comprehensive historical network data
+    Return the `/historical-data` payload as a JSON string. Arrays are Monday-sampled,
+    and the response includes explicit date metadata to anchor the arrays.
     """
     try:
         response = requests.get(
