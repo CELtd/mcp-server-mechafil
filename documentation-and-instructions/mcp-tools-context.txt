@@ -85,3 +85,19 @@
 - **Explanation Field**: Cross-check the `Explanation` payload to confirm the simulation used intended defaults or overrides, and reference it when reporting inputs.
 - **Post-Processing**: Translate numeric outputs into meaningful economic insights—compare start/end values, compute deltas, or express percentages where helpful—while staying strictly grounded in the documented Filecoin context and observable data.
 - **Error Handling**: If tool responses indicate connection issues or missing data, inform the user, recommend reruns, or suggest checking the mechafil server status.
+- **Chart Output Spec (for “plot/chart/graph” requests)**:
+  - When the user asks to plot historical data, return a `chart` object in the final response so the UI can render a single series.
+  - Format:
+    ```
+    {
+      "chart": {
+        "series": "historical_raw_power_eib",
+        "label": "Network RBP",
+        "unit": "EiB",
+        "start_date_key": "data_start_date"
+      }
+    }
+    ```
+  - `series` must be one field name from `get_historical_data` (e.g., `historical_raw_power_eib`, `historical_qa_power_eib`, `raw_byte_power`).
+  - `start_date_key` must be `data_start_date` for totals, or `hist_window_start_date` for onboarding-rate series.
+  - Do not include multiple series unless the user explicitly asked for a comparison.

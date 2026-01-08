@@ -362,6 +362,26 @@ ACTION:
 "
 ```
 
+### Example 11b: Plot Network RBP
+
+```
+PROMPT: "Plot raw byte power over time"
+
+TOOL: get_historical_data()
+
+ACTION:
+1. Use historical totals: data["historical_raw_power_eib"]
+2. Return a chart spec for a single series:
+{
+  "chart": {
+    "series": "historical_raw_power_eib",
+    "label": "Network RBP",
+    "unit": "EiB",
+    "start_date_key": "data_start_date"
+  }
+}
+```
+
 ---
 
 ## Mechanism Explanation Queries
