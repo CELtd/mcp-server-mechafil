@@ -367,7 +367,7 @@ ACTION:
 ```
 PROMPT: "Plot raw byte power over time"
 
-TOOL: get_historical_data()
+TOOL: get_historical_data(fields=["historical_raw_power_eib"])
 
 ACTION:
 1. Use historical totals: data["historical_raw_power_eib"]
@@ -380,6 +380,84 @@ ACTION:
     "start_date_key": "data_start_date"
   }
 }
+```
+
+### Example 11c: Plot Onboarding Rate
+
+```
+PROMPT: "Plot the onboarding rate"
+
+TOOL: get_historical_data(fields=["raw_byte_power"])
+
+ACTION:
+1. Use onboarding rate: data["raw_byte_power"] (EiB/day)
+2. Return a chart spec:
+{
+  "chart": {
+    "series": "raw_byte_power",
+    "label": "RBP Onboarding Rate",
+    "unit": "EiB/day",
+    "start_date_key": "hist_window_start_date"
+  }
+}
+```
+
+### Example 11d: Plot Network QAP
+
+```
+PROMPT: "Plot network QAP over time"
+
+TOOL: get_historical_data(fields=["historical_qa_power_eib"])
+
+ACTION:
+1. Use total power: data["historical_qa_power_eib"] (EiB)
+2. Return a chart spec:
+{
+  "chart": {
+    "series": "historical_qa_power_eib",
+    "label": "Network QAP",
+    "unit": "EiB",
+    "start_date_key": "data_start_date"
+  }
+}
+
+### Example 11e: Plot RBP and QAP Together
+
+```
+PROMPT: "Plot RBP and QAP in the past"
+
+TOOL: get_historical_data(fields=["historical_raw_power_eib", "historical_qa_power_eib"])
+
+ACTION:
+1. Use total power series: data["historical_raw_power_eib"], data["historical_qa_power_eib"]
+2. Return a multi-series chart spec as standalone JSON:
+{
+  "chart": {
+    "series": [
+      {"name": "historical_raw_power_eib", "label": "Network RBP", "unit": "EiB"},
+      {"name": "historical_qa_power_eib", "label": "Network QAP", "unit": "EiB"}
+    ],
+    "start_date_key": "data_start_date"
+  }
+}
+```
+
+### Example 11f: Plot RBP and QAP in Separate Charts
+
+```
+PROMPT: "Plot RBP and QAP in separate charts"
+
+TOOL: get_historical_data(fields=["historical_raw_power_eib","historical_qa_power_eib"])
+
+ACTION:
+1. Use total power series: data["historical_raw_power_eib"], data["historical_qa_power_eib"]
+2. Call provide_plot once per chart:
+
+TOOL: provide_plot(series="historical_raw_power_eib", start_date_key="data_start_date")
+TOOL: provide_plot(series="historical_qa_power_eib", start_date_key="data_start_date")
+
+3. Return the executive summary, then end the response with the two chart JSON objects (one per chart).
+```
 ```
 
 ---

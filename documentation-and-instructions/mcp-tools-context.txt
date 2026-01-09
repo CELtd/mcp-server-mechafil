@@ -5,6 +5,8 @@
 ### `get_historical_data`
 - **Endpoint**: `/historical-data`
 - **Purpose**: Retrieve cached Filecoin network data with explicit date metadata for anchoring arrays.
+- **Arguments**:
+  - `fields` (optional): string or list of field names to return (use for single-series plots).
 - **Response**: JSON string containing a `data` dictionary with:
   - 30-day medians (`raw_byte_power_averaged_over_previous_30days`, `renewal_rate_averaged_over_previous_30days`, `filplus_rate_averaged_over_previous_30days`).
   - Historical Monday-sampled series (`raw_byte_power`, `renewal_rate`, `filplus_rate`, `historical_raw_power_eib`, `historical_qa_power_eib`, etc.).
@@ -40,16 +42,31 @@
   - Validate user assumptions against empirical data.
   - **Interpretation**: Use `hist_window_*` for `raw_byte_power`/`renewal_rate`/`filplus_rate` and `data_*` for other arrays; do not infer dates from indices alone.
   - **Common Pitfall**: Do not describe `raw_byte_power` as “network power”; it is a rate, not a total.
-  - **Do/Don’t**:
+- **Do/Don’t**:
     - Do use `historical_raw_power_eib` / `historical_qa_power_eib` for “network power”.
     - Do use `raw_byte_power` only for onboarding-rate narratives.
     - Don’t compute “RBP level” from `raw_byte_power` without integrating it.
     - Don’t mix rate series and stock series in the same chart without labeling units.
-  - **Ambiguity Rule**:
+- **Ambiguity Rule**:
     - If the user says “raw byte power” or “network power”, use historical data, not simulation outputs.
     - Interpret “raw byte power” as total power (`historical_raw_power_eib`, EiB).
     - Interpret “onboarding rate” explicitly as `raw_byte_power` (EiB/day).
     - If unclear, ask: “Do you mean total power (EiB) or onboarding rate (EiB/day)?”
+
+### `provide_plot`
+- **Purpose**: Produce a strict chart JSON object the UI can render.
+- **When to use**:
+  - Use only if you are not confident you can emit a valid chart JSON yourself.
+  - Use when the user explicitly requests separate charts for multiple series (call once per chart).
+  - If you can emit the chart JSON directly, do **not** call this tool.
+- **Arguments**:
+  - `series`: single field name (string), a series descriptor, or a list of series for a combined chart.
+  - `start_date_key`: `data_start_date` for totals, `hist_window_start_date` for onboarding-rate series.
+  - `title`/`description` (optional): chart text metadata.
+- **Response**: `{ "chart": { ... } }`
+- **Separate charts**:
+  - If the user asks for separate charts, call `provide_plot` once per series (one chart per call).
+  - If the user asks for a comparison, include multiple series in a single `provide_plot` call.
 
 ### `simulate`
 - **Endpoint**: `/simulate`
@@ -80,13 +97,17 @@
 - **Baseline Establishment**: Start complex analyses with `get_historical_data` to anchor parameters and explain current state before simulating futures.
 - **Parameter Validation**: Flag unrealistic inputs (e.g., renewal rates outside 0–1, extreme RBP values) and discuss implications before executing.
 - **Metric Precision**: Use the exact metric identifiers returned by the API (e.g., `"network_QAP_EIB"` instead of legacy names) to avoid call failures.
+  - If you are unsure of the exact simulation field name, ask the user to choose from a short list instead of guessing.
 - **Scenario Consistency**: Keep non-varied parameters aligned across comparative runs so differences isolate the scenario factor.
 - **Latency Awareness**: Responses are Monday-sampled; clarify this cadence when interpreting trends or aggregating results.
 - **Explanation Field**: Cross-check the `Explanation` payload to confirm the simulation used intended defaults or overrides, and reference it when reporting inputs.
 - **Post-Processing**: Translate numeric outputs into meaningful economic insights—compare start/end values, compute deltas, or express percentages where helpful—while staying strictly grounded in the documented Filecoin context and observable data.
 - **Error Handling**: If tool responses indicate connection issues or missing data, inform the user, recommend reruns, or suggest checking the mechafil server status.
 - **Chart Output Spec (for “plot/chart/graph” requests)**:
-  - When the user asks to plot historical data, return a `chart` object in the final response so the UI can render a single series.
+  - When the user asks to plot historical data, return a standalone JSON object with a `chart` key so the UI can render it. Do not prefix it with labels like “Chart Specification” and do not wrap it in code fences.
+  - **Mandatory**: For any plot request, call `get_historical_data` with a `fields` filter so only the requested series are returned (single string for one series, list for comparisons). Do not call `get_historical_data` without `fields` when the user asked to plot.
+  - If you already called `get_historical_data` without `fields` for a plot request, re-call it with the correct `fields` before responding.
+  - If you cannot choose a single field confidently, ask the user to clarify before calling the tool.
   - Format:
     ```
     {
@@ -100,4 +121,27 @@
     ```
   - `series` must be one field name from `get_historical_data` (e.g., `historical_raw_power_eib`, `historical_qa_power_eib`, `raw_byte_power`).
   - `start_date_key` must be `data_start_date` for totals, or `hist_window_start_date` for onboarding-rate series.
-  - Do not include multiple series unless the user explicitly asked for a comparison.
+  - Do not include multiple series unless the user explicitly asked for a comparison (e.g., “plot RBP and QAP”).
+  - For multi-series requests, set `series` to a list of objects:
+    ```
+    {
+      "chart": {
+        "series": [
+          {"name": "historical_raw_power_eib", "label": "Network RBP", "unit": "EiB"},
+          {"name": "historical_qa_power_eib", "label": "Network QAP", "unit": "EiB"}
+        ],
+        "start_date_key": "data_start_date"
+      }
+    }
+    ```
+  - **Response contract**: For plot requests, your final response must end with the standalone chart JSON object. Do not omit it or replace it with narrative text.
+  - If you are unsure which series is requested, ask the user to clarify before plotting.
+- **Full Field Glossary (from API payload)**:
+  - Date metadata: `data_start_date`, `data_end_date`, `hist_window_start_date`, `hist_window_end_date`, `hist_window_days`.
+  - Flow/rate series: `raw_byte_power`, `raw_byte_power_onboarded_eib_per_day`, `renewal_rate`, `filplus_rate`.
+  - 30-day medians: `raw_byte_power_averaged_over_previous_30days`, `renewal_rate_averaged_over_previous_30days`, `filplus_rate_averaged_over_previous_30days`.
+  - Stock/total power: `historical_raw_power_eib`, `historical_qa_power_eib`, `network_raw_power_eib`, `network_qa_power_eib`.
+  - Onboarding/renewal flows (PiB/day): `historical_onboarded_rb_power_pib`, `historical_onboarded_qa_power_pib`, `historical_renewed_rb_power_pib`, `historical_renewed_qa_power_pib`.
+  - Model seed vectors: `rb_known_scheduled_expire_vec`, `qa_known_scheduled_expire_vec`, `known_scheduled_pledge_release_full_vec`, `burnt_fil_vec`, `historical_renewal_rate`.
+  - Scalars: `rb_power_zero`, `qa_power_zero`, `start_vested_amt`, `zero_cum_capped_power_eib`, `init_baseline_eib`, `circ_supply_zero`, `locked_fil_zero`, `daily_burnt_fil`.
+  - Metadata: `field_meta` (type/unit/meaning for key fields).

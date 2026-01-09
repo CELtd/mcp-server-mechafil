@@ -78,7 +78,10 @@ mcp = FastMCP("mechafil-server")
 
 @mcp.tool(annotations={"title": "Fetch System Prompt Context"})
 def fetch_context() -> str:
-    """Return the authoritative system prompt text with dynamic documentation inserts."""
+    """Return the authoritative system prompt text with dynamic documentation inserts.
+
+    Call once at startup (per session) before any other tool.
+    """
     # Wake the mechafil API so downstream calls don't pay the cold-start penalty.
     try:
         health_url = f"{MECHAFIL_SERVER_URL.rstrip('/')}/health"
@@ -142,18 +145,80 @@ class SimulationInputs(BaseModel):
     requested_metric: Annotated[
         Optional[str],
         Field(
-            description="""Metric name to return (default '1y_sector_roi')."""
+            description=(
+                "Metric name to return (default '1y_sector_roi'). Use the exact API metric "
+                "identifier; if unsure, ask the user to choose from a short list."
+            )
         )
+    ] = None
+
+
+class HistoricalDataRequest(BaseModel):
+    """Optional filters for historical data tool."""
+
+    fields: Annotated[
+        Optional[Union[str, List[str]]],
+        Field(
+            default=None,
+            description=(
+                "Optional field(s) to include in the response. For plot requests, "
+                "always use this to return only the requested series (single string or list)."
+            )
+        )
+    ] = None
+
+
+class PlotSeries(BaseModel):
+    """Single series configuration for chart output."""
+
+    name: Annotated[
+        str,
+        Field(
+            description=(
+                "Series field name from get_historical_data or simulation output. "
+                "Use historical_* for network totals and raw_byte_power for onboarding rate."
+            )
+        )
+    ]
+    label: Annotated[
+        Optional[str],
+        Field(default=None, description="Optional display label for the series.")
+    ] = None
+    unit: Annotated[
+        Optional[str],
+        Field(default=None, description="Optional unit label for the series.")
+    ] = None
+
+
+class ProvidePlotRequest(BaseModel):
+    """Build a strict chart specification for the UI to render."""
+
+    series: Annotated[
+        Union[str, PlotSeries, List[Union[str, PlotSeries]]],
+        Field(description="Series name(s) or series descriptors to plot.")
+    ]
+    start_date_key: Annotated[
+        Optional[str],
+        Field(default="data_start_date", description="Metadata key for the series start date.")
+    ] = "data_start_date"
+    title: Annotated[
+        Optional[str],
+        Field(default=None, description="Optional chart title.")
+    ] = None
+    description: Annotated[
+        Optional[str],
+        Field(default=None, description="Optional chart description.")
     ] = None
 
 
 @mcp.tool(annotations={"title": "Run Filecoin Economic Forecast Simulation"})
 def simulate(sim: SimulationInputs) -> dict:
-    """CALL FETCH_context before using this tool.
+    """Run a MechaFil simulation via `/simulate`.
 
-    Run a MechaFil simulation via `/simulate` and return a single metric series
-    (Monday-sampled) plus an `Explanation` that reflects the actual inputs used.
-    Use `requested_metric` to filter outputs; defaults come from historical data.
+    - Always align `forecast_length_days` with the user's horizon.
+    - Use `requested_metric` to filter outputs (defaults to '1y_sector_roi').
+    - Output is Monday-sampled. The response includes an `Explanation` reflecting
+      the actual inputs used after defaults are applied.
     """
     # Build request payload, excluding None values
     payload = {}
@@ -219,12 +284,13 @@ def simulate(sim: SimulationInputs) -> dict:
     }
     
 
-@mcp.tool()
-def get_historical_data() -> str:
-    """CALL FETCH_context before using this tool.
+@mcp.tool(annotations={"title": "Get Historical Filecoin Data"})
+def get_historical_data(req: Optional[HistoricalDataRequest] = None) -> str:
+    """Return the `/historical-data` payload as a JSON string.
 
-    Return the `/historical-data` payload as a JSON string. Arrays are Monday-sampled,
-    and the response includes explicit date metadata to anchor the arrays.
+    - Arrays are Monday-sampled.
+    - The response includes explicit date metadata to anchor arrays.
+    - For plot requests, always use `fields` to return only the requested series.
     """
     try:
         response = requests.get(
@@ -233,7 +299,23 @@ def get_historical_data() -> str:
             timeout=30
         )
         response.raise_for_status()
-        return json.dumps(response.json())
+        data = response.json()
+
+        if req and req.fields:
+            fields = req.fields if isinstance(req.fields, list) else [req.fields]
+            metadata_keys = {
+                "data_start_date",
+                "data_end_date",
+                "hist_window_start_date",
+                "hist_window_end_date",
+                "hist_window_days",
+                "field_meta",
+            }
+            if isinstance(data, dict) and isinstance(data.get("data"), dict):
+                filtered = {k: v for k, v in data["data"].items() if k in metadata_keys or k in fields}
+                data = {"data": filtered}
+
+        return json.dumps(data)
     
     except requests.exceptions.ConnectionError:
         return json.dumps({
@@ -252,6 +334,49 @@ def get_historical_data() -> str:
             "error": "Unexpected error",
             "message": str(e)
         })
+
+
+@mcp.tool(annotations={"title": "Provide Plot Spec"})
+def provide_plot(req: ProvidePlotRequest) -> dict:
+    """Build a strict chart object for the UI to render.
+
+    - Use when you are unsure about formatting chart JSON.
+    - Use when the user requests separate charts (call once per chart).
+    - If you can emit the chart JSON directly, skip this tool.
+    - The UI expects the returned object to be used verbatim.
+    """
+    series = req.series
+    normalized_series: Union[str, dict, List[dict]]
+
+    if isinstance(series, PlotSeries):
+        normalized_series = series.model_dump(exclude_none=True)
+    elif isinstance(series, str):
+        if req.title or req.description:
+            normalized_series = {"name": series}
+        else:
+            normalized_series = series
+    else:
+        normalized_list = []
+        for entry in series:
+            if isinstance(entry, PlotSeries):
+                normalized_list.append(entry.model_dump(exclude_none=True))
+            elif isinstance(entry, str):
+                normalized_list.append({"name": entry})
+            else:
+                normalized_list.append(entry)
+        normalized_series = normalized_list
+
+    chart = {
+        "series": normalized_series,
+        "start_date_key": req.start_date_key or "data_start_date",
+    }
+
+    if req.title:
+        chart["title"] = req.title
+    if req.description:
+        chart["description"] = req.description
+
+    return {"chart": chart}
 
 
 if __name__ == "__main__":
