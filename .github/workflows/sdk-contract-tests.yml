@@ -1,0 +1,60 @@
+name: SDK Contract Tests
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - 'sdk/**'
+      - '.github/workflows/sdk-contract-tests.yml'
+  pull_request:
+    paths:
+      - 'sdk/**'
+      - '.github/workflows/sdk-contract-tests.yml'
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    env:
+      MCP_BASE_URL: ${{ secrets.MCP_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if MCP_BASE_URL is not set
+        if: env.MCP_BASE_URL == ''
+        run: |
+          echo "MCP_BASE_URL not set; skipping contract tests." && exit 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Run JS contract test
+        run: |
+          cd sdk/js/econolens-client
+          pnpm install
+          MCP_BASE_URL="$MCP_BASE_URL" pnpm test:contract
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: |
+          cd sdk/python
+          python -m pip install --upgrade pip
+          python -m pip install --user . pytest
+
+      - name: Run Python contract test
+        env:
+          MCP_BASE_URL: ${{ env.MCP_BASE_URL }}
+        run: |
+          cd sdk/python
+          PYTHONPATH=. MCP_BASE_URL="$MCP_BASE_URL" pytest tests/contract_test.py
