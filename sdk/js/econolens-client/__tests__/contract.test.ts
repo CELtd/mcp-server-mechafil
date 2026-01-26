@@ -15,7 +15,7 @@ describe.skipIf(!shouldRun)('EconolensClient contract (MCP)', () => {
     const ctx = await client.fetchContext();
     expect(typeof ctx).toBe('string');
     expect(ctx.length).toBeGreaterThan(100);
-  });
+  }, 20000); // allow for cold-start / network latency
 
   it('gets historical data for a specific field', async () => {
     const hist = await client.getHistoricalData({ fields: ['raw_byte_power'] });
