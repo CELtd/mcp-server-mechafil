@@ -25,34 +25,46 @@ jobs:
           echo "MCP_BASE_URL not set; skipping contract tests." && exit 0
 
       - name: Setup Node
+        if: env.MCP_BASE_URL != ''
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
+      - name: Enable corepack and install pnpm
+        if: env.MCP_BASE_URL != ''
+        run: |
+          corepack enable
+          corepack prepare pnpm@10 --activate
+
       - name: Setup pnpm
+        if: env.MCP_BASE_URL != ''
         uses: pnpm/action-setup@v4
         with:
           version: 10
 
       - name: Run JS contract test
+        if: env.MCP_BASE_URL != ''
         run: |
           cd sdk/js/econolens-client
           pnpm install
           MCP_BASE_URL="$MCP_BASE_URL" pnpm test:contract
 
       - name: Setup Python
+        if: env.MCP_BASE_URL != ''
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Python deps
+        if: env.MCP_BASE_URL != ''
         run: |
           cd sdk/python
           python -m pip install --upgrade pip
           python -m pip install --user . pytest
 
       - name: Run Python contract test
+        if: env.MCP_BASE_URL != ''
         env:
           MCP_BASE_URL: ${{ env.MCP_BASE_URL }}
         run: |
