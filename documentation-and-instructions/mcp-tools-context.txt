@@ -15,25 +15,30 @@
     - `data_start_date` / `data_end_date`: overall historical span for the cached dataset.
     - `hist_window_start_date` / `hist_window_end_date` / `hist_window_days`: window for `raw_byte_power`, `renewal_rate`, `filplus_rate` (currently ~last 180 days).
   - Field aliases and metadata:
-    - `raw_byte_power_onboarded_eib_per_day`: alias of `raw_byte_power`.
+    - `raw_byte_power_onboarded_pib_per_day`: alias of `raw_byte_power` (preferred).
+    - `raw_byte_power_onboarded_eib_per_day`: deprecated alias of `raw_byte_power` (name is misleading, unit is PiB/day).
     - `network_raw_power_eib`: alias of `historical_raw_power_eib`.
     - `network_qa_power_eib`: alias of `historical_qa_power_eib`.
     - `field_meta`: per-field units and type (flow/stock/rate).
 - **Field Map (flow vs stock)**:
   - **Flow / rates (use for onboarding trends or simulation defaults):**
-    - `raw_byte_power` = onboarding rate (EiB/day), not total power.
+    - `raw_byte_power` = onboarding rate (PiB/day), not total power.
     - `renewal_rate` = fraction of expiring power renewed.
     - `filplus_rate` = fraction of onboarding that is FIL+.
   - **Stock / totals (use for network power levels):**
     - `historical_raw_power_eib` = total RBP on network.
     - `historical_qa_power_eib` = total QAP on network.
 - **Field Dictionary (units + intent)**:
-  - `raw_byte_power`: EiB/day, onboarding flow (not total power).
+  - `raw_byte_power`: PiB/day, onboarding flow (not total power).
   - `renewal_rate`: fraction (0..1), renewal flow rate.
   - `filplus_rate`: fraction (0..1), FIL+ share of onboarding.
   - `historical_raw_power_eib`: EiB, total network RBP (stock).
   - `historical_qa_power_eib`: EiB, total network QAP (stock).
-  - `raw_byte_power_averaged_over_previous_30days`: EiB/day, recent onboarding median.
+  - `raw_byte_power_averaged_over_previous_30days`: PiB/day, recent onboarding median.
+  - `locked_fil`: FIL, total network locked (pledge + reward vesting), on-chain stock (back to 2022-10-10).
+  - `circ_supply`: FIL, circulating supply, on-chain stock (back to 2022-10-10).
+  - `mined_fil`: FIL, cumulative mined block rewards, on-chain stock (back to 2022-10-10).
+  - `burnt_fil`: FIL, cumulative burnt FIL (gas + penalties), on-chain stock (back to 2022-10-10).
   - `renewal_rate_averaged_over_previous_30days`: fraction, recent renewal median.
   - `filplus_rate_averaged_over_previous_30days`: fraction, recent FIL+ median.
 - **Typical Uses**:
@@ -50,8 +55,8 @@
 - **Ambiguity Rule**:
     - If the user says “raw byte power” or “network power”, use historical data, not simulation outputs.
     - Interpret “raw byte power” as total power (`historical_raw_power_eib`, EiB).
-    - Interpret “onboarding rate” explicitly as `raw_byte_power` (EiB/day).
-    - If unclear, ask: “Do you mean total power (EiB) or onboarding rate (EiB/day)?”
+    - Interpret “onboarding rate” explicitly as `raw_byte_power` (PiB/day).
+    - If unclear, ask: “Do you mean total power (EiB) or onboarding rate (PiB/day)?”
 
 ### `provide_plot`
 - **Purpose**: Produce a strict chart JSON object the UI can render.
@@ -72,7 +77,7 @@
 - **Endpoint**: `/simulate`
 - **Purpose**: Run MechaFil economic forecasts under specific scenarios and return Monday-sampled time series.
 - **Key Arguments** (all optional, defaults derived from recent medians):
-  - `rbp`: Raw Byte Power onboarding (EiB/day).
+  - `rbp`: Raw Byte Power onboarding (PiB/day).
   - `rr`: Renewal rate (0–1 fraction).
   - `fpr`: FIL+ share (0–1 fraction).
   - `lock_target`: Target consensus pledge ratio (default 0.3).
@@ -138,9 +143,10 @@
   - If you are unsure which series is requested, ask the user to clarify before plotting.
 - **Full Field Glossary (from API payload)**:
   - Date metadata: `data_start_date`, `data_end_date`, `hist_window_start_date`, `hist_window_end_date`, `hist_window_days`.
-  - Flow/rate series: `raw_byte_power`, `raw_byte_power_onboarded_eib_per_day`, `renewal_rate`, `filplus_rate`.
+  - Flow/rate series (PiB/day): `raw_byte_power`, `raw_byte_power_onboarded_pib_per_day`, `renewal_rate`, `filplus_rate`. (Note: `raw_byte_power_onboarded_eib_per_day` is a deprecated alias with a misleading name — unit is PiB/day.)
   - 30-day medians: `raw_byte_power_averaged_over_previous_30days`, `renewal_rate_averaged_over_previous_30days`, `filplus_rate_averaged_over_previous_30days`.
   - Stock/total power: `historical_raw_power_eib`, `historical_qa_power_eib`, `network_raw_power_eib`, `network_qa_power_eib`.
+  - On-chain supply stocks (FIL, Monday-sampled, back to 2022-10-10): `locked_fil`, `circ_supply`, `mined_fil`, `burnt_fil`.
   - Onboarding/renewal flows (PiB/day): `historical_onboarded_rb_power_pib`, `historical_onboarded_qa_power_pib`, `historical_renewed_rb_power_pib`, `historical_renewed_qa_power_pib`.
   - Model seed vectors: `rb_known_scheduled_expire_vec`, `qa_known_scheduled_expire_vec`, `known_scheduled_pledge_release_full_vec`, `burnt_fil_vec`, `historical_renewal_rate`.
   - Scalars: `rb_power_zero`, `qa_power_zero`, `start_vested_amt`, `zero_cum_capped_power_eib`, `init_baseline_eib`, `circ_supply_zero`, `locked_fil_zero`, `daily_burnt_fil`.

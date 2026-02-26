@@ -103,7 +103,7 @@ class SimulationInputs(BaseModel):
     rbp: Annotated[
         Optional[Union[float, List[float]]],
         Field(
-            description="""Raw Byte Power onboarding in EiB/day. Float for constant or list for time-varying (len = forecast_length_days). Defaults to recent median if omitted."""
+            description="""Raw Byte Power onboarding in PiB/day. Float for constant or list for time-varying (len = forecast_length_days). Defaults to recent median if omitted."""
         )
     ] = None
 

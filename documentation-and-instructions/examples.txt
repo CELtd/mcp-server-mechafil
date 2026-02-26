@@ -79,9 +79,9 @@ OUTPUT:
 ACTION:
 1. Parse the JSON response
 2. Extract data["raw_byte_power_averaged_over_previous_30days"] = 3.38 (onboarding rate)
-3. Optionally extract data["raw_byte_power"] to show onboarding-rate trend (EiB/day), not total power
-4. Respond: "The recent onboarding rate is 3.38 EiB/day (30-day average). Looking at the weekly trend,
-   it has been gradually increasing from 2.8 to 3.38 EiB/day over the past few weeks."
+3. Optionally extract data["raw_byte_power"] to show onboarding-rate trend (PiB/day), not total power
+4. Respond: "The recent onboarding rate is 3.38 PiB/day (30-day average). Looking at the weekly trend,
+   it has been gradually increasing from 2.8 to 3.38 PiB/day over the past few weeks."
 ```
 
 ---
@@ -136,7 +136,7 @@ ACTION:
 4. Calculate growth: 42.1 - 35.2 = 6.9 EiB increase
 5. Calculate percentage: (6.9 / 35.2) * 100 = 19.6% growth
 6. Respond: "Network quality-adjusted power is projected to grow from 35.2 EiB to 42.1 EiB over the
-   next 6 months, representing a 19.6% increase under current onboarding rates (3.38 EiB/day)."
+   next 6 months, representing a 19.6% increase under current onboarding rates (3.38 PiB/day)."
 ```
 
 ### Example 6: Circulating Supply Projection
@@ -172,12 +172,12 @@ ACTION:
 ### Example 7: High Onboarding Impact
 
 ```
-PROMPT: "What if onboarding increases to 8 EiB/day - how would that affect ROI?"
+PROMPT: "What if onboarding increases to 8 PiB/day - how would that affect ROI?"
 
 STEP 1 - Get baseline:
 TOOL: get_historical_data()
 OUTPUT: { "data": { "raw_byte_power_averaged_over_previous_30days": 3.38, ... } }
-ACTION: Note current onboarding is 3.38 EiB/day
+ACTION: Note current onboarding is 3.38 PiB/day
 
 STEP 2 - Run baseline scenario:
 TOOL: simulate({
@@ -197,7 +197,7 @@ OUTPUT: { "1y_sector_roi": [0.18, 0.165, ..., 0.10], "Explanation": "..." }
 ACTION: Store high onboarding projection (18% → 10%)
 
 RESPONSE:
-"Increasing onboarding from 3.38 EiB/day (current) to 8 EiB/day would impact ROI: ..."
+"Increasing onboarding from 3.38 PiB/day (current) to 8 PiB/day would impact ROI: ..."
 ```
 
 ### Example 8: FIL+ Rate Reduction Impact
@@ -261,7 +261,7 @@ PROMPT: "Compare high growth vs low growth  scenarios"
 STEP 1 - Get context:
 TOOL: get_historical_data()
 OUTPUT: { "data": { "raw_byte_power_averaged_over_previous_30days": 3.38, ... } }
-ACTION: Note baseline is 3.38 EiB/day
+ACTION: Note baseline is 3.38 PiB/day
 ACTION: Define high growth and low growth e.g. +50% than baseline = 5.07 and -50% than baseline = 1.69
 
 STEP 2 - Run high growth scenario:
@@ -297,13 +297,13 @@ TOOL: simulate({
 OUTPUT: { "network_QAP_EIB": [35.2, ..., 38.4], "Explanation": "..." }
 
 RESPONSE:
-"Comparison of high growth vs low growth scenarios (current: 3.38 EiB/day):
+"Comparison of high growth vs low growth scenarios (current: 3.38 PiB/day):
 
-**High Growth (5.07 EiB/day), defined as 150% of the current raw byte power :**
+**High Growth (5.07 PiB/day), defined as 150% of the current raw byte power :**
 - ROI: ...
 - Network capacity: ...
 
-**Low Growth (1.69 EiB/day), defined as 50% of the current raw byte power:**
+**Low Growth (1.69 PiB/day), defined as 50% of the current raw byte power:**
 - ROI: ...
 - Network capacity: ...
 
@@ -390,13 +390,13 @@ PROMPT: "Plot the onboarding rate"
 TOOL: get_historical_data(fields=["raw_byte_power"])
 
 ACTION:
-1. Use onboarding rate: data["raw_byte_power"] (EiB/day)
+1. Use onboarding rate: data["raw_byte_power"] (PiB/day)
 2. Return a chart spec:
 {
   "chart": {
     "series": "raw_byte_power",
     "label": "RBP Onboarding Rate",
-    "unit": "EiB/day",
+    "unit": "PiB/day",
     "start_date_key": "hist_window_start_date"
   }
 }
@@ -615,7 +615,7 @@ RESPONSE:
 1. Your 80% FIL+ rate is slightly below network average (86%) - this may reduce competitive advantage
 2. ROI assumes successful renewal of sectors at expiration
 3. Pledge requirements decline over time, improving capital efficiency
-4. Returns assume stable network onboarding (~3.38 EiB/day)
+4. Returns assume stable network onboarding (~3.38 PiB/day)
 
 **Risks:**
 - Increased network onboarding would dilute your reward share
