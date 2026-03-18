@@ -97,6 +97,19 @@ def fetch_context() -> str:
     except Exception as exc:
         raise RuntimeError(f"Failed to render system prompt: {exc}") from exc
 
+# Cumulative simulation fields that are automatically converted to daily averages.
+# When the LLM requests one of these, the MCP server diffs consecutive Monday values
+# and divides by 7, returning a pre-computed daily rate under a new field name.
+# This prevents the LLM from making arithmetic errors on raw cumulative arrays.
+CUMULATIVE_TO_DAILY: Dict[str, str] = {
+    "cum_simple_reward":   "daily_simple_reward",
+    "cum_baseline_reward": "daily_baseline_reward",
+    "cum_network_reward":  "daily_network_reward_cumderived",
+    "total_vest":          "daily_vest",
+    "network_gas_burn":    "daily_gas_burn",
+}
+
+
 class SimulationInputs(BaseModel):
     """Parameters for Filecoin economic simulation. All fields are optional with intelligent defaults."""
     
@@ -258,6 +271,22 @@ def simulate(sim: SimulationInputs) -> dict:
     output_name: str = next(iter(sim_output.keys()))
     output_values: List[float] = sim_output[output_name]
 
+    # Automatically convert cumulative fields to daily averages so the LLM receives
+    # ready-to-use per-day values and never needs to diff raw cumulative arrays.
+    daily_note = ""
+    if output_name in CUMULATIVE_TO_DAILY and len(output_values) > 1:
+        daily_name = CUMULATIVE_TO_DAILY[output_name]
+        output_values = [
+            (output_values[i + 1] - output_values[i]) / 7
+            for i in range(len(output_values) - 1)
+        ]
+        output_name = daily_name
+        daily_note = (
+            f" The field '{daily_name}' contains pre-computed daily averages "
+            f"(consecutive Monday-sampled cumulative values differenced and divided by 7). "
+            f"Use these values directly — do NOT difference or divide again."
+        )
+
     input_data = data.get("input", {})
     if not input_data:
         raise ValueError("No input data found in response")
@@ -275,7 +304,8 @@ def simulate(sim: SimulationInputs) -> dict:
         "Results of a Filecoin simulation with the following input values: " +
         f"Raw byte power (rbp) onboarded: {_format_input(input_data.get('raw_byte_power'))}, " +
         f"Renewal rate (rr): {_format_input(input_data.get('renewal_rate'))}, " +
-        f"Filplus deals rate (fpr): {_format_input(input_data.get('filplus_rate'))}"
+        f"Filplus deals rate (fpr): {_format_input(input_data.get('filplus_rate'))}" +
+        daily_note
     )
 
     return {

@@ -23,7 +23,8 @@ Use the facts in this section as the authoritative knowledge base for economic i
 - **Dual Minting System**:
   - **Simple Minting (30%)**: Time-based exponential decay, smoothing rewards over time.
   - **Baseline Minting (70%)**: Releases FIL as network QAP approaches a target baseline (`2.5 EiB × 2^(t in years)`), creating counter-cyclical incentives.
-- **Economic Impact**: When network QAP lags baseline, reward release slows; surpassing baseline accelerates minting, encouraging sustained growth.
+- **Baseline value**: The baseline starts at ~2.888 EiB at genesis (October 2020) and **doubles approximately every year**. As of early 2026 (~5.5 years post-genesis) it is approximately **119–130 EiB**. Network QAP is currently ~17–23 EiB — well **below** the baseline. Never guess the baseline value; always fetch it with `simulate` using `requested_metric: "network_baseline_EIB"`.
+- **Economic Impact**: When network QAP is **below** the baseline (current situation), `capped_power = QAP < baseline`, so `network_time` accumulates slower than real time and baseline minting is **suppressed** — simple minting dominates (currently ~82% of total rewards). When network QAP is **above** the baseline, `capped_power = baseline`, `network_time` accumulates at full speed, and baseline minting approaches its theoretical 70% share. **A high simple-minting share (~82%) means the network is BELOW the baseline target.** Claiming the network is above baseline while simple minting dominates is contradictory.
 
 ## Pledge and Collateral Mechanics
 - **Initial Pledge** combines Storage Pledge (≈20 days of expected rewards) and Consensus Pledge (`30% × CirculatingSupply × SectorQAP / max(Baseline, NetworkQAP)`).

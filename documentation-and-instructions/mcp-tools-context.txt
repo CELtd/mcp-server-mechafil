@@ -120,6 +120,21 @@ When comparing historical data to simulation outputs, use these correspondences:
 - If unclear, ask: “Do you mean total network power (EiB) or the daily onboarding rate (PiB/day)?”
 - Never describe `raw_byte_power` as “network power” — it is a rate, not a total.
 
+---
+
+## Hard Rules — Never Violate These
+
+**Rule 1 — Baseline comparisons require a simulate call.**
+`network_baseline_EIB` does not exist in historical data. If you have not called `simulate` with `requested_metric: “network_baseline_EIB”` in this session, you do not know the baseline value. Do not state, estimate, or imply whether the network is above or below the baseline without that call. The baseline is ~119–130 EiB as of early 2026 — far above network QAP (~17–23 EiB) — but always fetch the precise value rather than relying on this approximation.
+
+**Rule 2 — Simple minting share reveals network position.**
+If `daily_simple_reward` is ~80%+ of total daily rewards, the network is **below** the baseline (network_time accumulates slowly, baseline minting suppressed). Do not claim the network is above the baseline while simple minting dominates — that is a contradiction.
+
+**Rule 3 — Never compute daily rates from raw cumulative arrays.**
+Cumulative simulation fields (`cum_simple_reward`, `cum_baseline_reward`, etc.) are auto-converted to daily rates by the server. Read the returned `daily_simple_reward` / `daily_baseline_reward` arrays directly. Do not apply any further differencing or division.
+
+---
+
 ### `provide_plot`
 - **Purpose**: Produce a strict chart JSON object the UI can render.
 - **When to use**:
@@ -145,8 +160,9 @@ When comparing historical data to simulation outputs, use these correspondences:
   - `lock_target`: Target consensus pledge ratio (default 0.3).
   - `forecast_length_days`: Forecast horizon in days (critical; must match user context).
   - `sector_duration_days`: Average sector lifetime (default 540).
-  - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`.
+  - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`, `"network_baseline_EIB"`.
 - **Response**: Dictionary with the requested metric array (Monday values) and an `Explanation` summarizing the actual inputs after defaults were applied.
+- **MANDATORY — baseline comparisons**: `network_baseline_EIB` is **not available in historical data**. It only exists in simulation output. Whenever you need to compare network QAP/RBP to the baseline, or determine whether the network is above or below the baseline target, you **must** call `simulate` with `requested_metric: "network_baseline_EIB"`. Never estimate or guess the baseline value from historical fields — the baseline is ~119–130 EiB as of early 2026, far above network QAP (~17–23 EiB).
 - **Output Interpretation (units + type)**:
   - **Power (instantaneous stock, EiB)**: `network_RBP_EIB`, `network_QAP_EIB`, `network_baseline_EIB` → total power on that day.
   - **Capped power**: `capped_power_EIB` → `min(network_power, baseline_function)` in EiB. This is the effective power that counts toward baseline minting, NOT total network power. Use `network_RBP_EIB` or `network_QAP_EIB` for actual network size.
@@ -229,13 +245,16 @@ daily_avg[t] = (cum[t] - cum[t-1]) / 7    # FIL/day average over that Monday-to-
 ```
 
 **Minting breakdown — simple vs baseline daily rewards:**
-There are no `day_simple_reward` or `day_baseline_reward` fields. You must derive them:
-1. Request `cum_simple_reward` and `cum_baseline_reward`
-2. `daily_simple[t]   = (cum_simple[t]   - cum_simple[t-1])   / 7`
-3. `daily_baseline[t] = (cum_baseline[t] - cum_baseline[t-1]) / 7`
-4. Verify: `daily_simple[t] + daily_baseline[t] ≈ day_network_reward[t]` (at the matching Monday index)
+The MCP server automatically converts cumulative minting fields to daily rates. Use these `requested_metric` values and read the returned arrays directly — they are already FIL/day, **do NOT difference them again**:
+- `cum_simple_reward`   → returned as **`daily_simple_reward`** (FIL/day)
+- `cum_baseline_reward` → returned as **`daily_baseline_reward`** (FIL/day)
+- `cum_network_reward`  → returned as **`daily_network_reward_cumderived`** (FIL/day, but prefer `day_network_reward`)
+- `total_vest`          → returned as **`daily_vest`** (FIL/day)
+- `network_gas_burn`    → returned as **`daily_gas_burn`** (FIL/day)
 
-**`day_network_reward` is the only pre-computed daily minting field.** It is already a flow (FIL/day) and requires no differencing.
+The Explanation field confirms the conversion. Cross-check: `daily_simple_reward[t] + daily_baseline_reward[t]` should ≈ `day_network_reward[t]`.
+
+**`day_network_reward` is the only field that was always a pre-computed daily flow.** All others above were cumulative and are now auto-converted by the server.
 
 ---
 
@@ -279,9 +298,9 @@ There are no `day_simple_reward` or `day_baseline_reward` fields. You must deriv
 | Field | Type | Unit | Description |
 |---|---|---|---|
 | `day_network_reward` | flow | FIL/day | Total daily block rewards (simple + baseline combined). Read directly. |
-| `cum_simple_reward` | cumstock | FIL | Running total minted by simple minting since genesis. Diff to get daily (see above). |
-| `cum_baseline_reward` | cumstock | FIL | Running total minted by baseline minting since genesis. Diff to get daily. |
-| `cum_network_reward` | cumstock | FIL | `cum_simple + cum_baseline`. Used internally for `circ_supply`. Diff to get daily total; or use `day_network_reward` directly. |
+| `cum_simple_reward` → **`daily_simple_reward`** | auto-converted | FIL/day | Request `cum_simple_reward`; server returns `daily_simple_reward` with pre-differenced daily values. Read directly. |
+| `cum_baseline_reward` → **`daily_baseline_reward`** | auto-converted | FIL/day | Request `cum_baseline_reward`; server returns `daily_baseline_reward`. Read directly. |
+| `cum_network_reward` → **`daily_network_reward_cumderived`** | auto-converted | FIL/day | Auto-converted if requested; prefer `day_network_reward` instead. |
 
 ### Supply and locking fields
 
