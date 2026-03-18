@@ -4,59 +4,121 @@
 
 ### `get_historical_data`
 - **Endpoint**: `/historical-data`
-- **Purpose**: Retrieve cached Filecoin network data with explicit date metadata for anchoring arrays.
+- **Purpose**: Retrieve cached on-chain Filecoin network data. Use this to establish current conditions, describe historical trends, and validate simulation assumptions against real data.
 - **Arguments**:
-  - `fields` (optional): string or list of field names to return (use for single-series plots).
-- **Response**: JSON string containing a `data` dictionary with:
-  - 30-day medians (`raw_byte_power_averaged_over_previous_30days`, `renewal_rate_averaged_over_previous_30days`, `filplus_rate_averaged_over_previous_30days`).
-  - Historical Monday-sampled series (`raw_byte_power`, `renewal_rate`, `filplus_rate`, `historical_raw_power_eib`, `historical_qa_power_eib`, etc.).
-  - Offline model vectors used to seed simulations (scheduled expiries, pledge releases, burn history).
-  - Date metadata:
-    - `data_start_date` / `data_end_date`: overall historical span for the cached dataset.
-    - `hist_window_start_date` / `hist_window_end_date` / `hist_window_days`: window for `raw_byte_power`, `renewal_rate`, `filplus_rate` (currently ~last 180 days).
-  - Field aliases and metadata:
-    - `raw_byte_power_onboarded_pib_per_day`: alias of `raw_byte_power` (preferred).
-    - `raw_byte_power_onboarded_eib_per_day`: deprecated alias of `raw_byte_power` (name is misleading, unit is PiB/day).
-    - `network_raw_power_eib`: alias of `historical_raw_power_eib`.
-    - `network_qa_power_eib`: alias of `historical_qa_power_eib`.
-    - `field_meta`: per-field units and type (flow/stock/rate).
-- **Field Map (flow vs stock)**:
-  - **Flow / rates (use for onboarding trends or simulation defaults):**
-    - `raw_byte_power` = onboarding rate (PiB/day), not total power.
-    - `renewal_rate` = fraction of expiring power renewed.
-    - `filplus_rate` = fraction of onboarding that is FIL+.
-  - **Stock / totals (use for network power levels):**
-    - `historical_raw_power_eib` = total RBP on network.
-    - `historical_qa_power_eib` = total QAP on network.
-- **Field Dictionary (units + intent)**:
-  - `raw_byte_power`: PiB/day, onboarding flow (not total power).
-  - `renewal_rate`: fraction (0..1), renewal flow rate.
-  - `filplus_rate`: fraction (0..1), FIL+ share of onboarding.
-  - `historical_raw_power_eib`: EiB, total network RBP (stock).
-  - `historical_qa_power_eib`: EiB, total network QAP (stock).
-  - `raw_byte_power_averaged_over_previous_30days`: PiB/day, recent onboarding median.
-  - `locked_fil`: FIL, total network locked (pledge + reward vesting), on-chain stock (back to 2022-10-10).
-  - `circ_supply`: FIL, circulating supply, on-chain stock (back to 2022-10-10).
-  - `mined_fil`: FIL, cumulative mined block rewards, on-chain stock (back to 2022-10-10).
-  - `burnt_fil`: FIL, cumulative burnt FIL (gas + penalties), on-chain stock (back to 2022-10-10).
-  - `renewal_rate_averaged_over_previous_30days`: fraction, recent renewal median.
-  - `filplus_rate_averaged_over_previous_30days`: fraction, recent FIL+ median.
-- **Typical Uses**:
-  - Establish current network conditions and default parameters.
-  - Describe historical trends and context for simulations.
-  - Validate user assumptions against empirical data.
-  - **Interpretation**: Use `hist_window_*` for `raw_byte_power`/`renewal_rate`/`filplus_rate` and `data_*` for other arrays; do not infer dates from indices alone.
-  - **Common Pitfall**: Do not describe `raw_byte_power` as “network power”; it is a rate, not a total.
-- **Do/Don’t**:
-    - Do use `historical_raw_power_eib` / `historical_qa_power_eib` for “network power”.
-    - Do use `raw_byte_power` only for onboarding-rate narratives.
-    - Don’t compute “RBP level” from `raw_byte_power` without integrating it.
-    - Don’t mix rate series and stock series in the same chart without labeling units.
-- **Ambiguity Rule**:
-    - If the user says “raw byte power” or “network power”, use historical data, not simulation outputs.
-    - Interpret “raw byte power” as total power (`historical_raw_power_eib`, EiB).
-    - Interpret “onboarding rate” explicitly as `raw_byte_power` (PiB/day).
-    - If unclear, ask: “Do you mean total power (EiB) or onboarding rate (PiB/day)?”
+  - `fields` (optional): string or list of field names to filter the response (use for plots or targeted queries).
+- **Response**: JSON string with a `data` dictionary. Fields fall into five distinct groups — each group has its own date anchor and must be treated differently.
+
+#### Critical: Two Date Anchors
+
+**All arrays in this response are Monday-sampled.** You must know which start date anchors each field to correctly label time axes or plot data.
+
+| Anchor key | Value | Which fields use it |
+|---|---|---|
+| `hist_window_start_date` | ~180 days ago | `raw_byte_power`, `renewal_rate`, `filplus_rate` (and their aliases) |
+| `data_start_date` | 2022-10-10 | All other arrays: power totals, supply stocks, onboarding/renewal flows, scheduled expiry and pledge release vectors |
+
+**Rule for `start_date_key` in plot specs:**
+- Use `hist_window_start_date` for: `raw_byte_power`, `renewal_rate`, `filplus_rate`
+- Use `data_start_date` for: everything else (all power, supply, onboarding, renewal arrays)
+
+#### Group 1 — Scalar summaries (no date, use as current-state defaults)
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `raw_byte_power_averaged_over_previous_30days` | scalar | PiB/day | Median onboarding rate over the last 30 days. Use as default `rbp` input for simulations. |
+| `renewal_rate_averaged_over_previous_30days` | scalar | fraction | Median renewal rate over the last 30 days. Use as default `rr`. |
+| `filplus_rate_averaged_over_previous_30days` | scalar | fraction | Median FIL+ share over the last 30 days. Use as default `fpr`. |
+
+#### Group 2 — Short-window rate arrays (~180 days, anchored to `hist_window_start_date`)
+
+These cover only the recent window and are suitable for trend analysis and simulation seeding.
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `raw_byte_power` | flow | PiB/day | Daily RBP **onboarding rate** — NOT total power. Preferred alias: `raw_byte_power_onboarded_pib_per_day`. |
+| `renewal_rate` | rate | fraction | Fraction of expiring power renewed each day. |
+| `filplus_rate` | rate | fraction | Fraction of daily onboarding that is FIL+ verified. |
+
+**Common pitfall**: `raw_byte_power` is a rate (PiB/day), not the total network size. Never describe it as “network power”. For total power use `historical_raw_power_eib`.
+
+#### Group 3 — Full-history arrays (back to 2022-10-10, anchored to `data_start_date`)
+
+These cover the entire on-chain record available in the cache.
+
+**Cumulative stocks** (must be differenced to get daily values — same as simulation cumstocks):
+
+| Field | Type | Unit | Simulation equivalent | Description |
+|---|---|---|---|---|
+| `mined_fil` | cumstock | FIL | `cum_network_reward` | Cumulative on-chain mined block rewards from genesis. Diff to get daily minted rate. |
+| `burnt_fil` | cumstock | FIL | `network_gas_burn` | Cumulative on-chain burnt FIL (gas + penalties). Diff to get daily burn rate. |
+
+**Instantaneous stocks** (read directly as the value on that day):
+
+| Field | Type | Unit | Simulation equivalent | Description |
+|---|---|---|---|---|
+| `locked_fil` | stock | FIL | `network_locked` | Total locked FIL (pledge + unvested rewards) on that day. |
+| `circ_supply` | stock | FIL | `circ_supply` | On-chain circulating supply on that day. |
+| `historical_raw_power_eib` | stock | EiB | `network_RBP_EIB` | Total network RBP. Alias: `network_raw_power_eib`. |
+| `historical_qa_power_eib` | stock | EiB | `network_QAP_EIB` | Total network QAP. Alias: `network_qa_power_eib`. |
+
+**Flow arrays** (read directly as daily rates):
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `historical_onboarded_rb_power_pib` | flow | PiB/day | Daily RBP onboarded over the full history. Same concept as `raw_byte_power` but spanning back to 2022-10-10. Use this for long-term onboarding trend analysis. |
+| `historical_onboarded_qa_power_pib` | flow | PiB/day | Daily QAP onboarded over the full history. |
+| `historical_renewed_rb_power_pib` | flow | PiB/day | Daily RBP renewed over the full history. |
+| `historical_renewed_qa_power_pib` | flow | PiB/day | Daily QAP renewed over the full history. |
+
+**Note on `mined_fil` and `burnt_fil`**: to get a daily mined/burnt rate from the Monday-sampled arrays, apply `(value[t] - value[t-1]) / 7`.
+
+#### Group 4 — Simulation seed scalars (current-state initializers; rarely needed for analysis)
+
+These are scalar values used to initialize the mechafil-jax simulation at `data_start_date`. They are present in the response but are not intended for direct narrative use.
+
+| Field | Unit | Description |
+|---|---|---|
+| `rb_power_zero` | **PiB** | Total RBP at `current_date` used to seed the simulation. Note: unit is PiB (not EiB), despite no unit suffix in the name. |
+| `qa_power_zero` | **PiB** | Total QAP at `current_date` in PiB. |
+| `circ_supply_zero` | FIL | Circulating supply at `data_start_date`. |
+| `locked_fil_zero` | FIL | Locked FIL at `data_start_date`. |
+| `start_vested_amt` | FIL | Total FIL vested by `data_start_date` (simulation vesting baseline). |
+| `zero_cum_capped_power_eib` | EiB·days | Cumulative capped power at `data_start_date` (baseline minting offset). |
+| `init_baseline_eib` | EiB | Baseline power function value at `data_start_date`. |
+| `daily_burnt_fil` | FIL/day | **Historical mean** daily gas burn (average of daily increments over the full history). Used as the forward burn-rate assumption in simulation. Not the current daily rate. |
+| `locked_reward_zero` | FIL | Estimated unvested reward-locked FIL at `data_start_date`. |
+
+#### Group 5 — Simulation seed vectors (forward-looking internal vectors; some useful for analysis)
+
+| Field | Unit | Window | Description |
+|---|---|---|---|
+| `rb_known_scheduled_expire_vec` | PiB/day | Forecast period from `current_date` | Scheduled RBP sector expirations per day. Useful for understanding near-term expiry pressure. |
+| `qa_known_scheduled_expire_vec` | PiB/day | Forecast period from `current_date` | Scheduled QAP sector expirations per day. |
+| `known_scheduled_pledge_release_full_vec` | FIL/day | Historical + forecast | Scheduled pledge collateral releases per day. |
+| `burnt_fil_vec` | FIL (cumulative) | `data_start_date` to `current_date` | Cumulative burnt FIL time series (same as `burnt_fil` but used as simulation seed). Not for direct analysis — use `burnt_fil` instead. |
+| `historical_renewal_rate` | fraction | `data_start_date` to `current_date` | Historical renewal rate over the full period. Same concept as `renewal_rate` but spanning the full history window. |
+
+#### Historical ↔ Simulation field equivalence
+
+When comparing historical data to simulation outputs, use these correspondences:
+
+| Historical field | Simulation equivalent | Note |
+|---|---|---|
+| `historical_raw_power_eib` | `network_RBP_EIB` | Historical is on-chain; simulation is model output |
+| `historical_qa_power_eib` | `network_QAP_EIB` | Same |
+| `locked_fil` | `network_locked` | Same |
+| `circ_supply` | `circ_supply` | Same field name, different source |
+| `mined_fil` | `cum_network_reward` | Both cumulative; model vs on-chain |
+| `burnt_fil` | `network_gas_burn` | Both cumulative; model vs on-chain |
+| `historical_onboarded_rb_power_pib` | `rb_day_onboarded_power_pib` | Historical segment of the simulation array |
+| `historical_onboarded_qa_power_pib` | `qa_day_onboarded_power_pib` | Same |
+
+#### Ambiguity rules
+- “raw byte power” or “network power” → use `historical_raw_power_eib` (EiB, total power)
+- “onboarding rate” → use `raw_byte_power` (PiB/day) for recent 180-day trend, or `historical_onboarded_rb_power_pib` for the full history
+- If unclear, ask: “Do you mean total network power (EiB) or the daily onboarding rate (PiB/day)?”
+- Never describe `raw_byte_power` as “network power” — it is a rate, not a total.
 
 ### `provide_plot`
 - **Purpose**: Produce a strict chart JSON object the UI can render.
@@ -86,11 +148,14 @@
   - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`.
 - **Response**: Dictionary with the requested metric array (Monday values) and an `Explanation` summarizing the actual inputs after defaults were applied.
 - **Output Interpretation (units + type)**:
-  - **Power (stock)**: `network_RBP_EIB`, `network_QAP_EIB`, `capped_power_EIB` → total power (EiB).
-  - **Supply (stock)**: `available_supply`, `circ_supply`, `network_locked` → FIL totals.
-  - **Rewards/flows**: `day_network_reward`, `day_rewards_per_sector`, `day_pledge_per_QAP` → per-day rates.
-  - **ROI**: `1y_sector_roi` is a ratio (0.15 = 15% annual ROI).
-  - **Time axis**: arrays are Monday-sampled; use the forecast horizon for dates.
+  - **Power (instantaneous stock, EiB)**: `network_RBP_EIB`, `network_QAP_EIB`, `network_baseline_EIB` → total power on that day.
+  - **Capped power**: `capped_power_EIB` → `min(network_power, baseline_function)` in EiB. This is the effective power that counts toward baseline minting, NOT total network power. Use `network_RBP_EIB` or `network_QAP_EIB` for actual network size.
+  - **Supply (instantaneous stock, FIL)**: `available_supply`, `circ_supply`, `network_locked`, `network_locked_pledge`, `network_locked_reward` → FIL totals on that day.
+  - **Cumulative stocks (FIL)**: `cum_simple_reward`, `cum_baseline_reward`, `cum_network_reward`, `total_vest`, `network_gas_burn` → running totals from Filecoin genesis. Cannot be read as "today's" value. Must be differenced to get daily values (see "Cumulative Fields" section below).
+  - **Daily flows (FIL/day)**: `day_network_reward`, `day_rewards_per_sector`, `total_day_vest` → readable directly as the value for that day.
+  - **Initial pledge cost**: `day_pledge_per_QAP` → FIL required per TiB of QAP for sectors onboarded that day. This is a per-unit capital cost, not a flow.
+  - **ROI**: `1y_sector_roi` is a dimensionless ratio (0.15 = 15% annual ROI). Its array is 90 entries shorter than `forecast_length_days` — do not align its last entry with the forecast end date.
+  - **Time axis**: arrays are Monday-sampled; consecutive values are 7 days apart.
 - **Usage Patterns**:
   - Single-run forecasts for direct projections.
   - Baseline plus scenario comparisons to evaluate parameter sensitivity.
@@ -141,13 +206,136 @@
     ```
   - **Response contract**: For plot requests, your final response must end with the standalone chart JSON object. Do not omit it or replace it with narrative text.
   - If you are unsure which series is requested, ask the user to clarify before plotting.
-- **Full Field Glossary (from API payload)**:
-  - Date metadata: `data_start_date`, `data_end_date`, `hist_window_start_date`, `hist_window_end_date`, `hist_window_days`.
-  - Flow/rate series (PiB/day): `raw_byte_power`, `raw_byte_power_onboarded_pib_per_day`, `renewal_rate`, `filplus_rate`. (Note: `raw_byte_power_onboarded_eib_per_day` is a deprecated alias with a misleading name — unit is PiB/day.)
-  - 30-day medians: `raw_byte_power_averaged_over_previous_30days`, `renewal_rate_averaged_over_previous_30days`, `filplus_rate_averaged_over_previous_30days`.
-  - Stock/total power: `historical_raw_power_eib`, `historical_qa_power_eib`, `network_raw_power_eib`, `network_qa_power_eib`.
-  - On-chain supply stocks (FIL, Monday-sampled, back to 2022-10-10): `locked_fil`, `circ_supply`, `mined_fil`, `burnt_fil`.
-  - Onboarding/renewal flows (PiB/day): `historical_onboarded_rb_power_pib`, `historical_onboarded_qa_power_pib`, `historical_renewed_rb_power_pib`, `historical_renewed_qa_power_pib`.
-  - Model seed vectors: `rb_known_scheduled_expire_vec`, `qa_known_scheduled_expire_vec`, `known_scheduled_pledge_release_full_vec`, `burnt_fil_vec`, `historical_renewal_rate`.
-  - Scalars: `rb_power_zero`, `qa_power_zero`, `start_vested_amt`, `zero_cum_capped_power_eib`, `init_baseline_eib`, `circ_supply_zero`, `locked_fil_zero`, `daily_burnt_fil`.
-  - Metadata: `field_meta` (type/unit/meaning for key fields).
+- **Note on aliases**: `raw_byte_power_onboarded_pib_per_day` = `raw_byte_power` (preferred). `raw_byte_power_onboarded_eib_per_day` is a deprecated alias with a misleading name — unit is PiB/day, not EiB/day. `network_raw_power_eib` = `historical_raw_power_eib`. `network_qa_power_eib` = `historical_qa_power_eib`. `field_meta` contains per-field type/unit/meaning for key fields and is always included.
+
+---
+
+## Cumulative Fields: How to Derive Daily Values
+
+Several simulation outputs are **cumulative stocks** — running totals accumulated from Filecoin network genesis (Oct 15, 2020). They grow monotonically and cannot be read directly as "today's value."
+
+**Cumulative simulation fields:**
+- `cum_simple_reward` — total FIL ever minted by simple minting (FIL)
+- `cum_baseline_reward` — total FIL ever minted by baseline minting (FIL)
+- `cum_network_reward` — `cum_simple + cum_baseline`; used internally to compute `circ_supply` (FIL)
+- `cum_capped_power_EIB` — integral of capped power over time (EiB·days); feeds `network_time`. Rarely needed directly.
+- `total_vest` — cumulative total FIL vested from all sources since genesis (FIL)
+- `network_gas_burn` — cumulative FIL burned by gas fees and penalties since genesis (FIL)
+
+**To get the daily contribution from a cumulative field:**
+Because `/simulate` returns Monday-sampled arrays, consecutive values are 7 days apart. To get a daily average over each 7-day window:
+```
+daily_avg[t] = (cum[t] - cum[t-1]) / 7    # FIL/day average over that Monday-to-Monday window
+```
+
+**Minting breakdown — simple vs baseline daily rewards:**
+There are no `day_simple_reward` or `day_baseline_reward` fields. You must derive them:
+1. Request `cum_simple_reward` and `cum_baseline_reward`
+2. `daily_simple[t]   = (cum_simple[t]   - cum_simple[t-1])   / 7`
+3. `daily_baseline[t] = (cum_baseline[t] - cum_baseline[t-1]) / 7`
+4. Verify: `daily_simple[t] + daily_baseline[t] ≈ day_network_reward[t]` (at the matching Monday index)
+
+**`day_network_reward` is the only pre-computed daily minting field.** It is already a flow (FIL/day) and requires no differencing.
+
+---
+
+## Simulation Field Reference: All 44 Output Fields
+
+**Type legend:**
+- **flow** — value applies to that specific day (read directly)
+- **stock** — instantaneous total as of that day (read directly)
+- **cumstock** — running total from genesis (must be differenced to get daily values)
+- **const** — same value every day; treat as a scalar
+
+### Power fields
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `network_RBP_EIB` | stock | EiB | Total raw byte power on the network. **Preferred** over `rb_total_power_eib` (identical array). |
+| `network_QAP_EIB` | stock | EiB | Total quality-adjusted power. **Preferred** over `qa_total_power_eib` (identical array). |
+| `rb_total_power_eib` | stock | EiB | Duplicate of `network_RBP_EIB`. Use `network_RBP_EIB` instead. |
+| `qa_total_power_eib` | stock | EiB | Duplicate of `network_QAP_EIB`. Use `network_QAP_EIB` instead. |
+| `network_baseline_EIB` | stock | EiB | Exponential minting baseline: ~2.766 EiB × 2^(t/year). Use this to understand where the network stands relative to the target. When `network_QAP_EIB < network_baseline_EIB`, baseline minting is slowed. |
+| `capped_power_EIB` | stock | EiB | `min(network_power, network_baseline_EIB)` — effective power for baseline minting. NOT total network power. |
+| `cum_capped_power_EIB` | cumstock | EiB·days | Integral of `capped_power_EIB` over time. Used to derive `network_time`. Rarely needed directly. |
+| `network_time` | stock | days-equiv | Compressed time used in the baseline minting formula. Technical internal quantity. |
+
+### Onboarding and renewal flows
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `rb_day_onboarded_power_pib` | flow | PiB/day | Daily RBP onboarded (historical window + forecast). |
+| `qa_day_onboarded_power_pib` | flow | PiB/day | Daily QAP onboarded. **Preferred** over `day_onboarded_power_QAP_PIB` (identical array). |
+| `day_onboarded_power_QAP_PIB` | flow | PiB/day | Duplicate of `qa_day_onboarded_power_pib`. Use `qa_day_onboarded_power_pib` instead. |
+| `rb_day_renewed_power_pib` | flow | PiB/day | Daily RBP renewed (historical + forecast). |
+| `qa_day_renewed_power_pib` | flow | PiB/day | Daily QAP renewed. **Preferred** over `day_renewed_power_QAP_PIB` (identical array). |
+| `day_renewed_power_QAP_PIB` | flow | PiB/day | Duplicate of `qa_day_renewed_power_pib`. Use `qa_day_renewed_power_pib` instead. |
+| `rb_sched_expire_power_pib` | flow | PiB/day | Scheduled RBP sector expirations. **Forecast-only** — starts at current_date, not historical start. |
+| `qa_sched_expire_power_pib` | flow | PiB/day | Scheduled QAP sector expirations. Forecast-only. |
+| `full_renewal_rate` | stock | fraction | Historical renewal rate concatenated with forecast renewal rate. Full trajectory of `rr`. |
+
+### Minting fields
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `day_network_reward` | flow | FIL/day | Total daily block rewards (simple + baseline combined). Read directly. |
+| `cum_simple_reward` | cumstock | FIL | Running total minted by simple minting since genesis. Diff to get daily (see above). |
+| `cum_baseline_reward` | cumstock | FIL | Running total minted by baseline minting since genesis. Diff to get daily. |
+| `cum_network_reward` | cumstock | FIL | `cum_simple + cum_baseline`. Used internally for `circ_supply`. Diff to get daily total; or use `day_network_reward` directly. |
+
+### Supply and locking fields
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `circ_supply` | stock | FIL | Circulating supply = vested + minted − burned − locked. |
+| `available_supply` | stock | FIL | `circ_supply + network_locked` (total supply before subtracting locked FIL). |
+| `network_locked` | stock | FIL | Total locked FIL = `network_locked_pledge + network_locked_reward`. |
+| `network_locked_pledge` | stock | FIL | Pledge collateral component of locked FIL only. |
+| `network_locked_reward` | stock | FIL | Unvested block reward component of locked FIL (180-day linear vesting). |
+| `network_gas_burn` | cumstock | FIL | Cumulative FIL burned by gas fees and penalties since genesis. NOT a daily flow — diff to get daily burn rate. |
+| `disbursed_reserve` | const | FIL | ~17.07M FIL disbursed from the Mining Reserve fund. Same value every day — treat as a scalar, not a time series. |
+
+### Pledge and reward fields
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `day_locked_pledge` | flow | FIL/day | New pledge locked for sectors **onboarded** that day. Not the running total of locked pledge. |
+| `day_renewed_pledge` | flow | FIL/day | New pledge locked for sectors **renewed** that day. |
+| `day_pledge_per_QAP` | cost | FIL/TiB QAP | Initial pledge required per TiB of QAP for sectors onboarded that day. A per-unit capital cost, not a flow. |
+| `day_rewards_per_sector` | flow | FIL/day/sector | Daily block reward per 32 GiB sector (QAP-weighted). |
+| `1y_return_per_sector` | flow | FIL/sector | 365-day rolling sum of `day_rewards_per_sector`. Absolute return, not normalized by pledge. **Array is 90 entries shorter than `forecast_length_days`.** |
+| `1y_sector_roi` | ratio | — | `1y_return_per_sector / day_pledge_per_QAP`. Annual ROI (0.15 = 15%). **Array is 90 entries shorter than `forecast_length_days`.** |
+
+### Vesting fields
+
+All per-tranche vesting fields are **daily flows** (FIL/day) — they are zero once the vesting period ends. Most short-duration SAFT tranches are already exhausted in near-future forecasts.
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `total_day_vest` | flow | FIL/day | Sum of all active vesting streams on that day. Read directly. |
+| `total_vest` | cumstock | FIL | Cumulative total FIL vested from all sources since genesis. Diff to get daily (or use `total_day_vest`). |
+| `six_month_vest_saft` | flow | FIL/day | 6-month SAFT tranche (~51.8M FIL total; exhausted ~Apr 2021 — zero in forecasts). |
+| `one_year_vest_saft` | flow | FIL/day | 1-year SAFT tranche (~31.8M FIL total; exhausted ~Oct 2021 — zero in forecasts). |
+| `two_year_vest_saft` | flow | FIL/day | 2-year SAFT tranche (~7.2M FIL total; exhausted ~Oct 2022 — zero in forecasts). |
+| `three_year_vest_saft` | flow | FIL/day | 3-year SAFT tranche (~88.5M FIL total; exhausted ~Oct 2023 — zero in forecasts). |
+| `six_year_vest_saft` | flow | FIL/day | 6-year SAFT tranche (~9.8M FIL total; exhausts ~Oct 2026). |
+| `six_year_vest_pl` | flow | FIL/day | Protocol Labs 6-year linear vesting (300M FIL total, ~136 FIL/day; exhausts ~Oct 2026). |
+| `six_year_vest_foundation` | flow | FIL/day | Filecoin Foundation 6-year vesting (100M FIL total, ~45 FIL/day; exhausts ~Oct 2026). |
+
+### Index field
+
+| Field | Type | Unit | Description |
+|---|---|---|---|
+| `days` | index | days since Oct 15 2020 | Integer day index from Filecoin network genesis — **not** from forecast start. Do not use for date labeling without accounting for the genesis offset. |
+
+---
+
+## Special Behaviors and Gotchas
+
+- **`1y_sector_roi` and `1y_return_per_sector` are shorter than the forecast**: These arrays are **90 entries shorter** than `forecast_length_days` due to the 365-day rolling window convolution. The last valid entry corresponds to 90 days before the forecast end date. Do not align their tail with the forecast end.
+- **`days` is not a forecast offset**: It counts from Filecoin network genesis (Oct 15, 2020). For example, if the simulation starts around Mar 2026, the first `days` value is approximately 2000, not 0.
+- **`disbursed_reserve` is a constant broadcast**: Every element of the array is identical (~17.07M FIL). It is not time-varying. Do not compute trends or differences from it.
+- **`rb_sched_expire_power_pib` and `qa_sched_expire_power_pib` are forecast-only**: Unlike most arrays that span historical window + forecast, these start at `current_date`. Their index 0 corresponds to tomorrow, not to the historical start.
+- **`network_gas_burn` is a cumulative stock, not a daily rate**: Its value on any given day is the total FIL burned since genesis. To get a daily burn rate, diff consecutive Monday values and divide by 7.
+- **Monday sampling and differences**: All `/simulate` arrays are Monday-sampled — consecutive elements are 7 days apart. When differencing a cumulative field, divide the result by 7 to get a per-day average.
+- **Duplicate field pairs**: The following pairs are identical arrays — prefer the first name listed: `network_RBP_EIB` / `rb_total_power_eib`; `network_QAP_EIB` / `qa_total_power_eib`; `qa_day_onboarded_power_pib` / `day_onboarded_power_QAP_PIB`; `qa_day_renewed_power_pib` / `day_renewed_power_QAP_PIB`.

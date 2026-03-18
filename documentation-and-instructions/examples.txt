@@ -699,6 +699,365 @@ RESPONSE:
 
 ---
 
+---
+
+## Minting Breakdown Queries
+
+### Example 17: Simple vs Baseline Daily Rewards
+
+```
+PROMPT: "How much of the daily block reward comes from simple minting vs baseline minting?"
+
+STEP 1 - Run simulation to get cumulative minting components:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "cum_simple_reward"
+})
+OUTPUT: {
+  "cum_simple_reward": [285450123.45, 285502234.56, 285554345.67, ...],
+  "Explanation": "..."
+}
+ACTION: Store cum_simple_reward array (cumulative FIL, grows from current total)
+
+STEP 2 - Get cumulative baseline reward:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "cum_baseline_reward"
+})
+OUTPUT: {
+  "cum_baseline_reward": [591230456.78, 591310567.89, 591390678.90, ...],
+  "Explanation": "..."
+}
+ACTION: Store cum_baseline_reward array
+
+STEP 3 - Get total daily reward (pre-computed, for verification):
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "day_network_reward"
+})
+OUTPUT: {
+  "day_network_reward": [732.45, 731.89, 731.33, ...],
+  "Explanation": "..."
+}
+
+CALCULATIONS (arrays are Monday-sampled, so consecutive values are 7 days apart):
+  daily_simple[t]   = (cum_simple[t]   - cum_simple[t-1])   / 7
+  daily_baseline[t] = (cum_baseline[t] - cum_baseline[t-1]) / 7
+
+  Example for first interval:
+  daily_simple[1]   = (285502234.56 - 285450123.45) / 7 ≈ 7444.4 FIL/day
+  daily_baseline[1] = (591310567.89 - 591230456.78) / 7 ≈ 11444.4 FIL/day
+
+  simple_share   = 7444.4 / (7444.4 + 11444.4) ≈ 39.4%
+  baseline_share = 11444.4 / (7444.4 + 11444.4) ≈ 60.6%
+
+  Verify: 7444.4 + 11444.4 ≈ 18888 FIL/day ≈ day_network_reward[1] = 731.89 * ...
+  (Note: day_network_reward is also Monday-sampled so represents that Monday's daily rate)
+
+RESPONSE:
+"Under current network conditions, daily block rewards break down approximately as:
+- Simple minting: ~7,444 FIL/day (~39% of total)
+- Baseline minting: ~11,444 FIL/day (~61% of total)
+- Total: ~18,888 FIL/day
+
+The 70/30 allocation between baseline and simple minting, combined with the network's
+position relative to the baseline function, determines this split. As network QAP approaches
+or exceeds the baseline target, baseline minting accelerates toward its theoretical maximum."
+```
+
+### Example 18: Network Position Relative to Baseline
+
+```
+PROMPT: "Is the network above or below the minting baseline? What does that mean for rewards?"
+
+STEP 1 - Get current network QAP and baseline:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "network_QAP_EIB"
+})
+OUTPUT: { "network_QAP_EIB": [35.2, 35.8, 36.4, ...], "Explanation": "..." }
+
+STEP 2 - Get the baseline function:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "network_baseline_EIB"
+})
+OUTPUT: { "network_baseline_EIB": [18.5, 18.85, 19.2, ...], "Explanation": "..." }
+
+STEP 3 - Get capped power to confirm the effective minting power:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "capped_power_EIB"
+})
+OUTPUT: { "capped_power_EIB": [18.5, 18.85, 19.2, ...], "Explanation": "..." }
+
+ANALYSIS:
+  network_QAP_EIB[0]   = 35.2 EiB  (actual network power)
+  network_baseline_EIB[0] = 18.5 EiB  (minting baseline target)
+  capped_power_EIB[0]  = 18.5 EiB  = min(35.2, 18.5) = baseline
+
+  The network QAP exceeds the baseline → capped_power = baseline throughout.
+  This means baseline minting is releasing FIL at its maximum rate for the current
+  network_time — the full 70% allocation is being earned.
+
+  If QAP were below baseline, capped_power < baseline, and baseline minting would
+  slow proportionally.
+
+RESPONSE:
+"The network is above the minting baseline:
+- Network QAP: 35.2 EiB
+- Baseline function: 18.5 EiB (growing ~annually by doubling)
+
+Since QAP > baseline, the capped power equals the baseline (18.5 EiB), not the network
+power. This is the maximum possible minting rate for baseline rewards — the baseline
+function acts as a ceiling on how fast the 70% baseline allocation is released.
+
+This is a favorable position for the network: all available baseline minting is being
+earned. The risk is that if the baseline grows faster than QAP (which doubles annually),
+the network could fall below the baseline in the future, slowing reward release."
+```
+
+---
+
+## Locking Decomposition Queries
+
+### Example 19: Pledge vs Reward Vesting in Locked FIL
+
+```
+PROMPT: "Of the FIL locked on the network, how much is pledge collateral vs unvested rewards?"
+
+STEP 1 - Get total locked:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "network_locked"
+})
+OUTPUT: { "network_locked": [145000000, 144800000, 144600000, ...], "Explanation": "..." }
+
+STEP 2 - Get pledge component:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "network_locked_pledge"
+})
+OUTPUT: { "network_locked_pledge": [98000000, 97900000, 97800000, ...], "Explanation": "..." }
+
+STEP 3 - Get reward vesting component:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "network_locked_reward"
+})
+OUTPUT: { "network_locked_reward": [47000000, 46900000, 46800000, ...], "Explanation": "..." }
+
+CALCULATIONS:
+  total_locked    = 145,000,000 FIL
+  pledge_locked   =  98,000,000 FIL → 67.6% of total locked
+  reward_locked   =  47,000,000 FIL → 32.4% of total locked
+  check: 98M + 47M = 145M ✓
+
+RESPONSE:
+"Of the ~145M FIL currently locked on the network:
+- **Pledge collateral**: ~98M FIL (67.6%) — locked as storage provider collateral. Released
+  when sectors expire or are renewed.
+- **Unvested block rewards**: ~47M FIL (32.4%) — block rewards in their 180-day linear
+  vesting period. Released continuously to miners over time.
+
+The pledge component dominates. Over the next year the model projects a gradual decline in
+total locked FIL (~145M → ~143M FIL), primarily driven by pledge requirements declining as
+the baseline function grows faster than network QAP."
+```
+
+---
+
+## Vesting Analysis Queries
+
+### Example 20: Current Vesting Flow and Its Impact on Circulating Supply
+
+```
+PROMPT: "How much FIL is being released through vesting, and from which sources?"
+
+STEP 1 - Get total daily vesting:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "total_day_vest"
+})
+OUTPUT: { "total_day_vest": [181.2, 181.2, 181.2, ...], "Explanation": "..." }
+
+STEP 2 - Get Protocol Labs vesting:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "six_year_vest_pl"
+})
+OUTPUT: { "six_year_vest_pl": [136.6, 136.6, ..., 0.0, 0.0], "Explanation": "..." }
+
+STEP 3 - Get Filecoin Foundation vesting:
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "six_year_vest_foundation"
+})
+OUTPUT: { "six_year_vest_foundation": [45.6, 45.6, ..., 0.0, 0.0], "Explanation": "..." }
+
+STEP 4 - Get the 6-year SAFT tranche (only SAFT still active in near-future forecasts):
+TOOL: simulate({
+  "forecast_length_days": 365,
+  "requested_metric": "six_year_vest_saft"
+})
+OUTPUT: { "six_year_vest_saft": [4.5, 4.5, ..., 0.0], "Explanation": "..." }
+
+ANALYSIS:
+  total_day_vest      ≈ 181.2 FIL/day
+  six_year_vest_pl    ≈ 136.6 FIL/day  (75.4%)
+  six_year_vest_foundation ≈ 45.6 FIL/day (25.2%)
+  six_year_vest_saft  ≈ 4.5 FIL/day    (2.5%)
+  shorter SAFT tranches: 0 FIL/day     (all exhausted by 2023)
+
+  NOTE: All three 6-year tranches exhaust around Oct 2026. After that date,
+  total_day_vest drops to ~0, removing ~181 FIL/day of supply pressure.
+
+RESPONSE:
+"Current vesting releases ~181 FIL/day into circulating supply, from:
+- Protocol Labs (6-year linear): ~136.6 FIL/day (75%)
+- Filecoin Foundation (6-year linear): ~45.6 FIL/day (25%)
+- Remaining SAFT (6-year): ~4.5 FIL/day (<3%)
+- All shorter SAFT tranches (6-month through 3-year): already exhausted — 0 FIL/day
+
+Important: All active vesting tranches expire around October 2026. After that point,
+vesting will contribute ~0 FIL/day to circulating supply — a material reduction in
+supply-side inflation from this source. This is visible in any `circ_supply` forecast
+extending beyond 2026."
+```
+
+---
+
+---
+
+## Historical Data Field Usage
+
+### Example 21: Daily Minted Rewards from Historical Data
+
+```
+PROMPT: "How many FIL are being minted per day currently?"
+
+TOOL: get_historical_data(fields=["mined_fil", "data_start_date", "data_end_date"])
+
+OUTPUT:
+{
+  "data": {
+    "mined_fil": [450123456.78, 450856234.12, 451589012.34, ..., 498234567.89],
+    "data_start_date": "2022-10-10",
+    "data_end_date": "2026-03-17"
+  }
+}
+
+IMPORTANT: `mined_fil` is a CUMULATIVE stock — the running total of all FIL ever minted.
+It cannot be read directly as a daily rate. To get the daily minted amount:
+
+CALCULATIONS (Monday-sampled, so consecutive values are 7 days apart):
+  daily_minted_avg = (mined_fil[-1] - mined_fil[-2]) / 7
+  Example: (498234567.89 - 497205890.12) / 7 = 1028677.77 / 7 ≈ 146,954 FIL/day
+
+RESPONSE:
+"Currently approximately 147,000 FIL/day is being minted as block rewards.
+This is derived from the on-chain cumulative mined FIL data (the weekly increase
+divided by 7). The same figure can also be obtained from `day_network_reward`
+via the `simulate` tool — the simulation model and on-chain data should closely agree."
+```
+
+### Example 22: Long-term Onboarding Trend (Full History vs Recent Window)
+
+```
+PROMPT: "Show me how onboarding has evolved since the network launch"
+
+NOTE: `raw_byte_power` only covers the last ~180 days (hist_window).
+For the full history back to Oct 2022, use `historical_onboarded_rb_power_pib`.
+
+TOOL: get_historical_data(fields=["historical_onboarded_rb_power_pib", "data_start_date", "data_end_date"])
+
+OUTPUT:
+{
+  "data": {
+    "historical_onboarded_rb_power_pib": [8.2, 9.1, 7.8, 10.5, ..., 3.38],
+    "data_start_date": "2022-10-10",
+    "data_end_date": "2026-03-17"
+  }
+}
+
+ACTION:
+1. Anchor this array to data_start_date (2022-10-10), not hist_window_start_date
+2. Each value is daily RBP onboarded in PiB/day for that Monday
+3. Plot with start_date_key = "data_start_date"
+4. For comparison with recent trend, also extract raw_byte_power (anchored to hist_window_start_date)
+
+CHART SPEC:
+{
+  "chart": {
+    "series": "historical_onboarded_rb_power_pib",
+    "label": "Daily RBP Onboarded",
+    "unit": "PiB/day",
+    "start_date_key": "data_start_date"
+  }
+}
+
+RESPONSE:
+"Network RBP onboarding (daily rate) since October 2022:
+- Peak onboarding: ~X PiB/day in [period]
+- Recent (30-day average): 3.38 PiB/day
+- Trend: [describe from data]
+
+Note: this shows the onboarding *rate*, not total network power.
+For total power use `historical_raw_power_eib`."
+```
+
+### Example 23: Historical Supply Decomposition
+
+```
+PROMPT: "How has locked FIL and circulating supply evolved?"
+
+TOOL: get_historical_data(fields=["locked_fil", "circ_supply", "data_start_date", "data_end_date"])
+
+OUTPUT:
+{
+  "data": {
+    "locked_fil":  [145000000, 146200000, ..., 132000000],
+    "circ_supply": [412000000, 415000000, ..., 580000000],
+    "data_start_date": "2022-10-10",
+    "data_end_date": "2026-03-17"
+  }
+}
+
+IMPORTANT:
+- Both are instantaneous stocks — read directly as the value on that Monday.
+- `locked_fil` is the on-chain equivalent of the simulation's `network_locked`.
+- `circ_supply` is the on-chain equivalent of the simulation's `circ_supply`.
+- Both are anchored to data_start_date.
+
+CALCULATIONS:
+  circ_supply_current = circ_supply[-1] = 580,000,000 FIL
+  locked_fil_current  = locked_fil[-1]  = 132,000,000 FIL
+  lock_ratio = 132M / 580M ≈ 22.8%
+
+CHART SPEC (multi-series, same axis not recommended due to scale — consider separate charts):
+{
+  "chart": {
+    "series": [
+      {"name": "circ_supply", "label": "Circulating Supply", "unit": "FIL"},
+      {"name": "locked_fil",  "label": "Locked FIL",         "unit": "FIL"}
+    ],
+    "start_date_key": "data_start_date"
+  }
+}
+
+RESPONSE:
+"Historical supply evolution (Oct 2022 → present):
+- Circulating supply: 412M → 580M FIL (+41%)
+- Locked FIL: 145M → 132M FIL (-9%)
+- Lock ratio: fell from 35% to ~23%, below the protocol's 30% target
+
+The declining lock ratio reflects pledge requirements falling faster than
+circulating supply grew — a consequence of the baseline function growing
+faster than network QAP, reducing per-unit pledge costs."
+```
+
+---
+
 ## Summary
 
 These examples demonstrate:
@@ -708,3 +1067,7 @@ These examples demonstrate:
 4. Appropriate response construction with economic interpretation
 5. Edge case handling and user clarification
 6. Integration of multiple tool calls for comprehensive analysis
+7. Correct handling of cumulative fields (differencing, Monday-sampling division by 7)
+8. Locking decomposition into pledge vs reward vesting components
+9. Minting breakdown into simple vs baseline components
+10. Vesting schedule analysis with expiry awareness
