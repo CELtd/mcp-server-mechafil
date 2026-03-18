@@ -7,11 +7,16 @@ Use the facts in this section as the authoritative knowledge base for economic i
 - **Incentive Model**: Block production probability scales with storage power, aligning network security with real storage contributions.
 - **Digital Twin**: MechaFil models these dynamics to forecast network trajectories, enabling data-driven economic analysis.
 
+## Network Timing
+- **Epoch duration**: 1 epoch = 30 seconds.
+- **Epochs per day**: 2880 (= 86400 s / 30 s). All per-day quantities divide by 2880 to get per-epoch values, NOT by 5.
+- **Blocks per epoch**: The whole network produces ~5 blocks per epoch on average. A single miner’s expected blocks per epoch ≈ `5 × (MinerQAP / NetworkQAP)`. This "5" is blocks-per-epoch for the network, not the number of epochs per day.
+
 ## Power, Rewards, and Consensus
 - **Raw Byte Power (RBP)** measures physical storage committed (EiB).
 - **Quality Adjusted Power (QAP)** applies multipliers to RBP (`QAP = RBP × SectorQualityMultiplier`), with FIL+ verified deals receiving a 10× multiplier.
 - **Block Rewards**: Total daily rewards follow Filecoin’s minting schedule and are shared in proportion to `MinerQAP / NetworkQAP`.
-- **Election Probability**: Expected block wins per epoch are approximately `5 × (MinerQAP / NetworkQAP)`, keeping storage power central to consensus.
+- **Election Probability**: Expected block wins per epoch for a single miner ≈ `5 × (MinerQAP / NetworkQAP)`. The network as a whole produces ~5 blocks per epoch.
 
 ## Minting and Token Economics
 - **Supply Cap**: 2 billion FIL, with 55% allocated to storage mining rewards.
