@@ -308,9 +308,24 @@ def simulate(sim: SimulationInputs) -> dict:
         daily_note
     )
 
+    # Compute actual n_entries from the output array (may differ from input_data["n_entries"]
+    # if a cumulative-to-daily conversion was applied, which reduces length by 1).
+    actual_n = len(output_values)
+    sim_start = input_data.get("sim_start_date")
+    timestep = input_data.get("timestep_days", 7)
+    if sim_start and actual_n > 0:
+        from datetime import date as _date, timedelta as _td
+        sim_end = (_date.fromisoformat(sim_start) + _td(days=(actual_n - 1) * timestep)).isoformat()
+    else:
+        sim_end = input_data.get("sim_end_date")
+
     return {
         output_name: output_values,
         "Explanation": output_explanation_text,
+        "sim_start_date": sim_start,
+        "sim_end_date": sim_end,
+        "timestep_days": timestep,
+        "n_entries": actual_n,
     }
     
 
@@ -339,6 +354,9 @@ def get_historical_data(req: Optional[HistoricalDataRequest] = None) -> str:
                 "hist_window_start_date",
                 "hist_window_end_date",
                 "hist_window_days",
+                "timestep_days",
+                "n_entries",
+                "hist_window_n_entries",
                 "field_meta",
             }
             if isinstance(data, dict) and isinstance(data.get("data"), dict):

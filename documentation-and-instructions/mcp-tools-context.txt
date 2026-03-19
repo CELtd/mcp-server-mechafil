@@ -11,12 +11,19 @@
 
 #### Critical: Two Date Anchors
 
-**All arrays in this response are Monday-sampled.** You must know which start date anchors each field to correctly label time axes or plot data.
+**All arrays in this response are Monday-sampled** (`timestep_days: 7` is now returned in the response and always equals 7). To map array index `i` to a calendar date, use `anchor_date + i * 7 days`, where `anchor_date` depends on the field group (see table below).
 
-| Anchor key | Value | Which fields use it |
-|---|---|---|
-| `hist_window_start_date` | ~180 days ago | `raw_byte_power`, `renewal_rate`, `filplus_rate` (and their aliases) |
-| `data_start_date` | 2022-10-10 | All other arrays: power totals, supply stocks, onboarding/renewal flows, scheduled expiry and pledge release vectors |
+The response now includes two entry-count fields so you can validate array lengths without counting:
+
+| Anchor key | Value | Entry-count key | Which fields use it |
+|---|---|---|---|
+| `hist_window_start_date` | ~180 days ago | `hist_window_n_entries` | `raw_byte_power`, `renewal_rate`, `filplus_rate` (and their aliases) |
+| `data_start_date` | 2022-10-10 | `n_entries` | All other arrays: power totals, supply stocks, onboarding/renewal flows, scheduled expiry and pledge release vectors |
+
+**To map index `i` to a calendar date:**
+- For short-window fields: `hist_window_start_date + i * 7 days`
+- For all other fields: `data_start_date + i * 7 days`
+- Cross-check: the last index should satisfy `anchor_date + (n_entries - 1) * 7 == data_end_date` (or `hist_window_end_date` for the short-window group)
 
 **Rule for `start_date_key` in plot specs:**
 - Use `hist_window_start_date` for: `raw_byte_power`, `renewal_rate`, `filplus_rate`
@@ -161,7 +168,13 @@ Cumulative simulation fields (`cum_simple_reward`, `cum_baseline_reward`, etc.) 
   - `forecast_length_days`: Forecast horizon in days (critical; must match user context).
   - `sector_duration_days`: Average sector lifetime (default 540).
   - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`, `"network_baseline_EIB"`.
-- **Response**: Dictionary with the requested metric array (Monday values) and an `Explanation` summarizing the actual inputs after defaults were applied.
+- **Response**: Dictionary with the following top-level keys:
+  - `{metric_name}`: the requested metric array (Monday-sampled values)
+  - `Explanation`: string summarizing the actual inputs after defaults were applied
+  - `sim_start_date`: date of index 0 of the metric array (YYYY-MM-DD)
+  - `sim_end_date`: date of the last index of the metric array (YYYY-MM-DD)
+  - `timestep_days`: always 7 — days between consecutive entries
+  - `n_entries`: actual length of the metric array (note: if a cumulative-to-daily conversion was applied, this is one less than the raw API n_entries)
 - **MANDATORY — baseline comparisons**: `network_baseline_EIB` is **not available in historical data**. It only exists in simulation output. Whenever you need to compare network QAP/RBP to the baseline, or determine whether the network is above or below the baseline target, you **must** call `simulate` with `requested_metric: "network_baseline_EIB"`. Never estimate or guess the baseline value from historical fields — the baseline is ~119–130 EiB as of early 2026, far above network QAP (~17–23 EiB).
 - **Output Interpretation (units + type)**:
   - **Power (instantaneous stock, EiB)**: `network_RBP_EIB`, `network_QAP_EIB`, `network_baseline_EIB` → total power on that day.
@@ -171,7 +184,12 @@ Cumulative simulation fields (`cum_simple_reward`, `cum_baseline_reward`, etc.) 
   - **Daily flows (FIL/day)**: `day_network_reward`, `day_rewards_per_sector`, `total_day_vest` → readable directly as the value for that day.
   - **Initial pledge cost**: `day_pledge_per_QAP` → FIL required per TiB of QAP for sectors onboarded that day. This is a per-unit capital cost, not a flow.
   - **ROI**: `1y_sector_roi` is a dimensionless ratio (0.15 = 15% annual ROI). Its array is 90 entries shorter than `forecast_length_days` — do not align its last entry with the forecast end date.
-  - **Time axis**: arrays are Monday-sampled; consecutive values are 7 days apart.
+  - **Time axis**: Arrays are Monday-sampled. The `input` block now provides unambiguous date-mapping fields:
+    - `sim_start_date`: calendar date of `simulation_output[field][0]` — always a Monday. Use this as the anchor for all date calculations. **Do not use `current_date` for index-to-date mapping** — `current_date` is not necessarily a Monday, so `sim_start_date` may differ from it by up to 6 days.
+    - `sim_end_date`: calendar date of `simulation_output[field][-1]` for standard-length fields.
+    - `timestep_days`: always 7 for `/simulate`. Use `sim_start_date + i * timestep_days` to compute the date for index `i`.
+    - `n_entries`: expected array length for standard fields. Note: `1y_sector_roi` and `1y_return_per_sector` are 90 entries shorter — their last date is `sim_end_date - 90 * 7 days`.
+    - **Implementation note**: `sim_start_date` is computed as the first Monday on or after `current_date - 1` (not `current_date` itself). This means if `current_date` is a Tuesday, `sim_start_date` equals `current_date - 1` (the Monday before the request date). In all other cases `sim_start_date` falls on or after `current_date`. This is a known quirk of the server's internal downsampling and is reflected accurately in the returned `sim_start_date` — always trust the field, never recompute it.
 - **Usage Patterns**:
   - Single-run forecasts for direct projections.
   - Baseline plus scenario comparisons to evaluate parameter sensitivity.
@@ -352,7 +370,7 @@ All per-tranche vesting fields are **daily flows** (FIL/day) — they are zero o
 ## Special Behaviors and Gotchas
 
 - **`1y_sector_roi` and `1y_return_per_sector` are shorter than the forecast**: These arrays are **90 entries shorter** than `forecast_length_days` due to the 365-day rolling window convolution. The last valid entry corresponds to 90 days before the forecast end date. Do not align their tail with the forecast end.
-- **`days` is not a forecast offset**: It counts from Filecoin network genesis (Oct 15, 2020). For example, if the simulation starts around Mar 2026, the first `days` value is approximately 2000, not 0.
+- **`days` is not a forecast offset**: It counts from Filecoin network genesis (Oct 15, 2020). For example, if the simulation starts around Mar 2026, the first `days` value is approximately 2000, not 0. For calendar date mapping always use `sim_start_date + i * timestep_days` from the `input` block instead — never recompute dates from the `days` field.
 - **`disbursed_reserve` is a constant broadcast**: Every element of the array is identical (~17.07M FIL). It is not time-varying. Do not compute trends or differences from it.
 - **`rb_sched_expire_power_pib` and `qa_sched_expire_power_pib` are forecast-only**: Unlike most arrays that span historical window + forecast, these start at `current_date`. Their index 0 corresponds to tomorrow, not to the historical start.
 - **`network_gas_burn` is a cumulative stock, not a daily rate**: Its value on any given day is the total FIL burned since genesis. To get a daily burn rate, diff consecutive Monday values and divide by 7.
