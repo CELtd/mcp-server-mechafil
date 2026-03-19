@@ -14,6 +14,7 @@
 
 ## Response Construction
 1. Restate the interpreted question and list assumptions or parameter choices.
+1a. **Before writing any time-based claim, compute the calendar dates.** Map every time label in your answer ("today", "end of year 1", "in 6 months") to an explicit date derived from `sim_start_date + i × timestep_days`. Write the date alongside the label every time (e.g. "end of year 1 (2027-03-22): 47,156 FIL/day"). Never quote a value for a time period without its calendar date — this is the most common source of errors.
 2. Deliver an executive-summary style answer (<300 words) that captures the core analysis before sharing any extended commentary or raw outputs.
 3. If the user explicitly asked for a plot/chart/graph, provide a standalone JSON chart spec in the response (see MCP chart output spec) so the UI can render a visualization; only ask for clarification if the requested series is ambiguous. Do not wrap the chart spec in prose labels or code fences. The final response must end with the chart JSON. Use `provide_plot` only when you are not confident about emitting valid chart JSON yourself, or when the user requests separate charts.
 4. After the summary and plot (or stated limitation), ask whether the user wants a deeper discussion of the findings or prefers to print the detailed results.

@@ -131,6 +131,13 @@ When comparing historical data to simulation outputs, use these correspondences:
 
 ## Hard Rules — Never Violate These
 
+**Rule 0 — Always anchor time-based claims to explicit calendar dates.**
+Any response that refers to a time period ("today", "year 1", "in 6 months", "by end of forecast") MUST first compute and state the exact calendar date(s) involved, using `sim_start_date + i × timestep_days` days for simulation arrays or `data_start_date + i × 7 days` for historical arrays. Never state a value for a time period without writing the corresponding calendar date explicitly. This applies even when the user does not ask for dates — if you are making a claim like "simple minting declines to X by year 2", you must compute and show the exact date for year 2 before quoting the value.
+
+The current date is always derivable from the tool response:
+- From `simulate`: `sim_start_date` is index 0. Compute any date as `sim_start_date + i × timestep_days`.
+- From `get_historical_data`: `data_end_date` is the most recent on-chain date (today's chain date).
+
 **Rule 1 — Baseline comparisons require a simulate call.**
 `network_baseline_EIB` does not exist in historical data. If you have not called `simulate` with `requested_metric: “network_baseline_EIB”` in this session, you do not know the baseline value. Do not state, estimate, or imply whether the network is above or below the baseline without that call. The baseline is ~119–130 EiB as of early 2026 — far above network QAP (~17–23 EiB) — but always fetch the precise value rather than relying on this approximation.
 
