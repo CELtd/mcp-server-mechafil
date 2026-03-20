@@ -139,12 +139,17 @@ The current date is always derivable from the tool response:
 - From `get_historical_data`: `data_end_date` is the most recent on-chain date (today's chain date).
 
 **Rule 1 — Baseline comparisons require a simulate call.**
-`network_baseline_EIB` does not exist in historical data. If you have not called `simulate` with `requested_metric: “network_baseline_EIB”` in this session, you do not know the baseline value. Do not state, estimate, or imply whether the network is above or below the baseline without that call. The baseline is ~119–130 EiB as of early 2026 — far above network QAP (~17–23 EiB) — but always fetch the precise value rather than relying on this approximation.
+`network_baseline_EIB` does not exist in historical data. If you have not called `simulate` with `requested_metrics: [“network_baseline_EIB”]` (or included it alongside other metrics) in this session, you do not know the baseline value. Do not state, estimate, or imply whether the network is above or below the baseline without that call. The baseline is ~119–130 EiB as of early 2026 — far above network QAP (~17–23 EiB) — but always fetch the precise value rather than relying on this approximation.
 
 **Rule 2 — Simple minting share reveals network position.**
 If `daily_simple_reward` is ~80%+ of total daily rewards, the network is **below** the baseline (network_time accumulates slowly, baseline minting suppressed). Do not claim the network is above the baseline while simple minting dominates — that is a contradiction.
 
-**Rule 3 — Never compute daily rates from raw cumulative arrays.**
+**Rule 3 — Never call `simulate` more than once for the same input parameters.**
+If you need multiple metrics from the same scenario (same `rbp`, `rr`, `fpr`, `forecast_length_days`, etc.), batch them into a single call using `requested_metrics: ["metric_a", "metric_b", "metric_c"]`. The simulation runs once and returns all requested metrics simultaneously. Calling `simulate` multiple times with the same parameters wastes latency, burns tokens, and is never necessary.
+
+The only valid reason to call `simulate` more than once is when the **input parameters differ** (e.g., comparing a baseline scenario vs. a high-growth scenario).
+
+**Rule 4 — Never compute daily rates from raw cumulative arrays.**
 Cumulative simulation fields (`cum_simple_reward`, `cum_baseline_reward`, etc.) are auto-converted to daily rates by the server. Read the returned `daily_simple_reward` / `daily_baseline_reward` arrays directly. Do not apply any further differencing or division.
 
 ---
@@ -174,7 +179,7 @@ Cumulative simulation fields (`cum_simple_reward`, `cum_baseline_reward`, etc.) 
   - `lock_target`: Target consensus pledge ratio (default 0.3).
   - `forecast_length_days`: Forecast horizon in days (critical; must match user context).
   - `sector_duration_days`: Average sector lifetime (default 540).
-  - `requested_metric`: Specific output metric to return (default `"1y_sector_roi"`). Examples include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`, `"network_baseline_EIB"`.
+  - `requested_metrics`: List of metric names to return in a single simulation run (default `["1y_sector_roi"]`). **Always pass a list** — even for a single metric. Pass multiple metrics to retrieve all results without re-running the simulation. Examples: `["1y_sector_roi"]`, `["network_QAP_EIB", "circ_supply", "day_network_reward"]`. Available metrics include `"available_supply"`, `"network_RBP_EIB"`, `"network_QAP_EIB"`, `"day_network_reward"`, `"day_pledge_per_QAP"`, `"network_baseline_EIB"`, `"circ_supply"`, `"network_locked"`, `"day_rewards_per_sector"`, `"1y_sector_roi"`.
 - **Response**: Dictionary with the following top-level keys:
   - `{metric_name}`: the requested metric array (Monday-sampled values)
   - `Explanation`: string summarizing the actual inputs after defaults were applied
@@ -182,7 +187,7 @@ Cumulative simulation fields (`cum_simple_reward`, `cum_baseline_reward`, etc.) 
   - `sim_end_date`: date of the last index of the metric array (YYYY-MM-DD)
   - `timestep_days`: always 7 — days between consecutive entries
   - `n_entries`: actual length of the metric array (note: if a cumulative-to-daily conversion was applied, this is one less than the raw API n_entries)
-- **MANDATORY — baseline comparisons**: `network_baseline_EIB` is **not available in historical data**. It only exists in simulation output. Whenever you need to compare network QAP/RBP to the baseline, or determine whether the network is above or below the baseline target, you **must** call `simulate` with `requested_metric: "network_baseline_EIB"`. Never estimate or guess the baseline value from historical fields — the baseline is ~119–130 EiB as of early 2026, far above network QAP (~17–23 EiB).
+- **MANDATORY — baseline comparisons**: `network_baseline_EIB` is **not available in historical data**. It only exists in simulation output. Whenever you need to compare network QAP/RBP to the baseline, or determine whether the network is above or below the baseline target, you **must** call `simulate` with `requested_metrics: ["network_baseline_EIB"]` (or include it alongside other metrics). Never estimate or guess the baseline value from historical fields — the baseline is ~119–130 EiB as of early 2026, far above network QAP (~17–23 EiB).
 - **Output Interpretation (units + type)**:
   - **Power (instantaneous stock, EiB)**: `network_RBP_EIB`, `network_QAP_EIB`, `network_baseline_EIB` → total power on that day.
   - **Capped power**: `capped_power_EIB` → `min(network_power, baseline_function)` in EiB. This is the effective power that counts toward baseline minting, NOT total network power. Use `network_RBP_EIB` or `network_QAP_EIB` for actual network size.

@@ -95,7 +95,7 @@ PROMPT: "What will storage provider ROI be next year?"
 
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi"]
 })
 
 OUTPUT:
@@ -120,7 +120,7 @@ PROMPT: "How will network capacity grow over the next 6 months?"
 
 TOOL: simulate({
   "forecast_length_days": 180,
-  "requested_metric": "network_QAP_EIB"
+  "requested_metrics": ["network_QAP_EIB"]
 })
 
 OUTPUT:
@@ -146,7 +146,7 @@ PROMPT: "Show me circulating supply projections for the next 2 years"
 
 TOOL: simulate({
   "forecast_length_days": 730,
-  "requested_metric": "circ_supply"
+  "requested_metrics": ["circ_supply"]
 })
 
 OUTPUT:
@@ -182,16 +182,16 @@ ACTION: Note current onboarding is 3.38 PiB/day
 STEP 2 - Run baseline scenario:
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi"]
 })
 OUTPUT: { "1y_sector_roi": [0.18, 0.177, ..., 0.15], "Explanation": "..." }
 ACTION: Store baseline projection (18% → 15%)
 
-STEP 3 - Run high onboarding scenario:
+STEP 3 - Run high onboarding scenario (different rbp → separate call is correct):
 TOOL: simulate({
   "rbp": 8.0,
   "forecast_length_days": 365,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi"]
 })
 OUTPUT: { "1y_sector_roi": [0.18, 0.165, ..., 0.10], "Explanation": "..." }
 ACTION: Store high onboarding projection (18% → 10%)
@@ -210,36 +210,31 @@ TOOL: get_historical_data()
 OUTPUT: { "data": { "filplus_rate_averaged_over_previous_30days": 0.86, ... } }
 ACTION: Note current FIL+ rate is 86%
 
-STEP 2 - Run baseline (current FIL+):
+STEP 2 - Run baseline scenario (current FIL+, all needed metrics in one call):
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi", "network_QAP_EIB", "day_pledge_per_QAP"]
 })
-OUTPUT: { "1y_sector_roi": [0.18, ..., 0.15], "Explanation": "..." }
+OUTPUT: {
+  "1y_sector_roi":     [0.18, ..., 0.15],
+  "network_QAP_EIB":   [35.2, ..., 38.4],
+  "day_pledge_per_QAP": [0.25, ..., 0.22],
+  "Explanation": "..."
+}
 
-STEP 3 - Run low FIL+ scenario for ROI:
+STEP 3 - Run low FIL+ scenario (fpr=0.5, all needed metrics in one call):
 TOOL: simulate({
   "fpr": 0.5,
   "forecast_length_days": 365,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi", "network_QAP_EIB", "day_pledge_per_QAP"]
 })
-OUTPUT: { "1y_sector_roi": [0.18, ..., 0.19], "Explanation": "..." }
-
-STEP 4 - Run low FIL+ scenario for network power:
-TOOL: simulate({
-  "fpr": 0.5,
-  "forecast_length_days": 365,
-  "requested_metric": "network_QAP_EIB"
-})
-OUTPUT: { "network_QAP_EIB": [35.2, ..., 32.1], "Explanation": "..." }
-
-STEP 5 - Run low FIL+ scenario for pledge requirements:
-TOOL: simulate({
-  "fpr": 0.5,
-  "forecast_length_days": 365,
-  "requested_metric": "day_pledge_per_QAP"
-})
-OUTPUT: { "day_pledge_per_QAP": [0.25, ..., 0.18], "Explanation": "..." }
+OUTPUT: {
+  "1y_sector_roi":     [0.18, ..., 0.19],
+  "network_QAP_EIB":   [35.2, ..., 32.1],
+  "day_pledge_per_QAP": [0.25, ..., 0.18],
+  "Explanation": "..."
+}
+ACTION: Two simulate calls total — one per distinct input scenario. Never three or four.
 
 RESPONSE:
 "...
@@ -264,37 +259,30 @@ OUTPUT: { "data": { "raw_byte_power_averaged_over_previous_30days": 3.38, ... } 
 ACTION: Note baseline is 3.38 PiB/day
 ACTION: Define high growth and low growth e.g. +50% than baseline = 5.07 and -50% than baseline = 1.69
 
-STEP 2 - Run high growth scenario:
+STEP 2 - Run high growth scenario (both metrics in one call):
 TOOL: simulate({
   "rbp": 5.07,
   "forecast_length_days": 365,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi", "network_QAP_EIB"]
 })
-OUTPUT: { "1y_sector_roi": [0.18, ..., 0.11], "Explanation": "..." }
+OUTPUT: {
+  "1y_sector_roi":   [0.18, ..., 0.11],
+  "network_QAP_EIB": [35.2, ..., 52.8],
+  "Explanation": "..."
+}
 
-STEP 3 - Run low growth scenario:
+STEP 3 - Run low growth scenario (both metrics in one call):
 TOOL: simulate({
   "rbp": 1.69,
   "forecast_length_days": 365,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi", "network_QAP_EIB"]
 })
-OUTPUT: { "1y_sector_roi": [0.18, ..., 0.17], "Explanation": "..." }
-
-STEP 4 - Get network capacity for high growth:
-TOOL: simulate({
-  "rbp": 5.07,
-  "forecast_length_days": 365,
-  "requested_metric": "network_QAP_EIB"
-})
-OUTPUT: { "network_QAP_EIB": [35.2, ..., 52.8], "Explanation": "..." }
-
-STEP 5 - Get network capacity for low growth:
-TOOL: simulate({
-  "rbp": 1.69,
-  "forecast_length_days": 365,
-  "requested_metric": "network_QAP_EIB"
-})
-OUTPUT: { "network_QAP_EIB": [35.2, ..., 38.4], "Explanation": "..." }
+OUTPUT: {
+  "1y_sector_roi":   [0.18, ..., 0.17],
+  "network_QAP_EIB": [35.2, ..., 38.4],
+  "Explanation": "..."
+}
+ACTION: Two simulate calls total — one per scenario. Never four.
 
 RESPONSE:
 "Comparison of high growth vs low growth scenarios (current: 3.38 PiB/day):
@@ -560,29 +548,19 @@ TOOL: get_historical_data()
 OUTPUT: { "data": { "filplus_rate_averaged_over_previous_30days": 0.86, ... } }
 ACTION: Note current conditions
 
-STEP 2 - Simulate ROI with user's FIL+ rate:
+STEP 2 - Simulate all needed metrics in a single call (same fpr=0.80):
 TOOL: simulate({
   "fpr": 0.80,
   "forecast_length_days": 730,
-  "requested_metric": "1y_sector_roi"
+  "requested_metrics": ["1y_sector_roi", "day_pledge_per_QAP", "day_rewards_per_sector"]
 })
-OUTPUT: { "1y_sector_roi": [0.18, 0.177, ..., 0.16], "Explanation": "..." }
-
-STEP 3 - Get pledge requirements:
-TOOL: simulate({
-  "fpr": 0.80,
-  "forecast_length_days": 730,
-  "requested_metric": "day_pledge_per_QAP"
-})
-OUTPUT: { "day_pledge_per_QAP": [0.25, 0.24, ..., 0.22], "Explanation": "..." }
-
-STEP 4 - Get daily rewards:
-TOOL: simulate({
-  "fpr": 0.80,
-  "forecast_length_days": 730,
-  "requested_metric": "day_rewards_per_sector"
-})
-OUTPUT: { "day_rewards_per_sector": [0.0045, 0.0044, ..., 0.0041], "Explanation": "..." }
+OUTPUT: {
+  "1y_sector_roi":         [0.18, 0.177, ..., 0.16],
+  "day_pledge_per_QAP":    [0.25, 0.24, ..., 0.22],
+  "day_rewards_per_sector":[0.0045, 0.0044, ..., 0.0041],
+  "Explanation": "..."
+}
+ACTION: One simulate call for all three metrics — never three separate calls with identical parameters.
 
 CALCULATIONS:
 1. 100 TiB = 102,400 GiB = 3,200 sectors (32 GiB each)
@@ -656,25 +634,21 @@ PROMPT: "Show me how the network will evolve - power, supply, and rewards"
 STEP 1 - Clarify time horizon (assume 1 year if not specified):
 ACTION: Determine forecast_length_days = 365
 
-STEP 2 - Run simulation for network power:
+STEP 2 - Run ONE simulation with all three metrics batched:
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "network_QAP_EIB"
+  "requested_metrics": ["network_QAP_EIB", "circ_supply", "day_network_reward"]
 })
 
-STEP 3 - Run simulation for circulating supply:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "circ_supply"
-})
+OUTPUT:
+{
+  "network_QAP_EIB":      [35.2, 35.8, ..., 42.1],
+  "circ_supply":          [580250000, 582100000, ..., 606500000],
+  "day_network_reward":   [732.45, 731.89, ..., 705.2],
+  "Explanation": "Results of a Filecoin simulation with the following input values: ..."
+}
 
-STEP 4 - Run simulation for daily rewards:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "day_network_reward"
-})
-
-ACTION: Present all three projections with interpretation
+ACTION: Present all three projections with interpretation (one simulate call, zero waste)
 
 RESPONSE:
 "Network evolution over the next year (under current conditions):
@@ -708,37 +682,19 @@ RESPONSE:
 ```
 PROMPT: "How much of the daily block reward comes from simple minting vs baseline minting?"
 
-STEP 1 - Run simulation to get cumulative minting components:
+STEP 1 - Get all three metrics in a single simulate call:
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "cum_simple_reward"
+  "requested_metrics": ["cum_simple_reward", "cum_baseline_reward", "day_network_reward"]
 })
 OUTPUT: {
-  "cum_simple_reward": [285450123.45, 285502234.56, 285554345.67, ...],
+  "daily_simple_reward":  [7444.4, 7440.1, ...],
+  "daily_baseline_reward":[11444.4, 11440.2, ...],
+  "day_network_reward":   [732.45, 731.89, ...],
   "Explanation": "..."
 }
-ACTION: Store cum_simple_reward array (cumulative FIL, grows from current total)
-
-STEP 2 - Get cumulative baseline reward:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "cum_baseline_reward"
-})
-OUTPUT: {
-  "cum_baseline_reward": [591230456.78, 591310567.89, 591390678.90, ...],
-  "Explanation": "..."
-}
-ACTION: Store cum_baseline_reward array
-
-STEP 3 - Get total daily reward (pre-computed, for verification):
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "day_network_reward"
-})
-OUTPUT: {
-  "day_network_reward": [732.45, 731.89, 731.33, ...],
-  "Explanation": "..."
-}
+NOTE: cum_simple_reward and cum_baseline_reward are auto-converted to daily rates by the server
+(returned as daily_simple_reward and daily_baseline_reward). Read directly — do NOT difference again.
 
 CALCULATIONS (arrays are Monday-sampled, so consecutive values are 7 days apart):
   daily_simple[t]   = (cum_simple[t]   - cum_simple[t-1])   / 7
@@ -770,26 +726,17 @@ or exceeds the baseline target, baseline minting accelerates toward its theoreti
 ```
 PROMPT: "Is the network above or below the minting baseline? What does that mean for rewards?"
 
-STEP 1 - Get current network QAP and baseline:
+STEP 1 - Get all three metrics in one simulate call:
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "network_QAP_EIB"
+  "requested_metrics": ["network_QAP_EIB", "network_baseline_EIB", "capped_power_EIB"]
 })
-OUTPUT: { "network_QAP_EIB": [35.2, 35.8, 36.4, ...], "Explanation": "..." }
-
-STEP 2 - Get the baseline function:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "network_baseline_EIB"
-})
-OUTPUT: { "network_baseline_EIB": [18.5, 18.85, 19.2, ...], "Explanation": "..." }
-
-STEP 3 - Get capped power to confirm the effective minting power:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "capped_power_EIB"
-})
-OUTPUT: { "capped_power_EIB": [18.5, 18.85, 19.2, ...], "Explanation": "..." }
+OUTPUT: {
+  "network_QAP_EIB":      [35.2, 35.8, 36.4, ...],
+  "network_baseline_EIB": [18.5, 18.85, 19.2, ...],
+  "capped_power_EIB":     [18.5, 18.85, 19.2, ...],
+  "Explanation": "..."
+}
 
 ANALYSIS:
   network_QAP_EIB[0]   = 35.2 EiB  (actual network power)
@@ -826,26 +773,17 @@ the network could fall below the baseline in the future, slowing reward release.
 ```
 PROMPT: "Of the FIL locked on the network, how much is pledge collateral vs unvested rewards?"
 
-STEP 1 - Get total locked:
+STEP 1 - Get all three locked components in one simulate call:
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "network_locked"
+  "requested_metrics": ["network_locked", "network_locked_pledge", "network_locked_reward"]
 })
-OUTPUT: { "network_locked": [145000000, 144800000, 144600000, ...], "Explanation": "..." }
-
-STEP 2 - Get pledge component:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "network_locked_pledge"
-})
-OUTPUT: { "network_locked_pledge": [98000000, 97900000, 97800000, ...], "Explanation": "..." }
-
-STEP 3 - Get reward vesting component:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "network_locked_reward"
-})
-OUTPUT: { "network_locked_reward": [47000000, 46900000, 46800000, ...], "Explanation": "..." }
+OUTPUT: {
+  "network_locked":        [145000000, 144800000, ...],
+  "network_locked_pledge": [98000000, 97900000, ...],
+  "network_locked_reward": [47000000, 46900000, ...],
+  "Explanation": "..."
+}
 
 CALCULATIONS:
   total_locked    = 145,000,000 FIL
@@ -874,33 +812,18 @@ the baseline function grows faster than network QAP."
 ```
 PROMPT: "How much FIL is being released through vesting, and from which sources?"
 
-STEP 1 - Get total daily vesting:
+STEP 1 - Get all vesting components in one simulate call:
 TOOL: simulate({
   "forecast_length_days": 365,
-  "requested_metric": "total_day_vest"
+  "requested_metrics": ["total_day_vest", "six_year_vest_pl", "six_year_vest_foundation", "six_year_vest_saft"]
 })
-OUTPUT: { "total_day_vest": [181.2, 181.2, 181.2, ...], "Explanation": "..." }
-
-STEP 2 - Get Protocol Labs vesting:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "six_year_vest_pl"
-})
-OUTPUT: { "six_year_vest_pl": [136.6, 136.6, ..., 0.0, 0.0], "Explanation": "..." }
-
-STEP 3 - Get Filecoin Foundation vesting:
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "six_year_vest_foundation"
-})
-OUTPUT: { "six_year_vest_foundation": [45.6, 45.6, ..., 0.0, 0.0], "Explanation": "..." }
-
-STEP 4 - Get the 6-year SAFT tranche (only SAFT still active in near-future forecasts):
-TOOL: simulate({
-  "forecast_length_days": 365,
-  "requested_metric": "six_year_vest_saft"
-})
-OUTPUT: { "six_year_vest_saft": [4.5, 4.5, ..., 0.0], "Explanation": "..." }
+OUTPUT: {
+  "total_day_vest":           [181.2, 181.2, ...],
+  "six_year_vest_pl":         [136.6, 136.6, ..., 0.0],
+  "six_year_vest_foundation": [45.6, 45.6, ..., 0.0],
+  "six_year_vest_saft":       [4.5, 4.5, ..., 0.0],
+  "Explanation": "..."
+}
 
 ANALYSIS:
   total_day_vest      ≈ 181.2 FIL/day

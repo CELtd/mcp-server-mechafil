@@ -155,12 +155,13 @@ class SimulationInputs(BaseModel):
         )
     ] = None
 
-    requested_metric: Annotated[
-        Optional[str],
+    requested_metrics: Annotated[
+        Optional[List[str]],
         Field(
             description=(
-                "Metric name to return (default '1y_sector_roi'). Use the exact API metric "
-                "identifier; if unsure, ask the user to choose from a short list."
+                "One or more metric names to return in a single simulation run (default ['1y_sector_roi']). "
+                "Pass a list to retrieve multiple metrics without re-running the simulation. "
+                "Use exact API metric identifiers; if unsure, ask the user to choose from a short list."
             )
         )
     ] = None
@@ -229,7 +230,7 @@ def simulate(sim: SimulationInputs) -> dict:
     """Run a MechaFil simulation via `/simulate`.
 
     - Always align `forecast_length_days` with the user's horizon.
-    - Use `requested_metric` to filter outputs (defaults to '1y_sector_roi').
+    - Use `requested_metrics` (list) to return one or more metrics in a single run (defaults to ['1y_sector_roi']).
     - Output is Monday-sampled. The response includes an `Explanation` reflecting
       the actual inputs used after defaults are applied.
     """
@@ -247,11 +248,9 @@ def simulate(sim: SimulationInputs) -> dict:
         payload["forecast_length_days"] = sim.forecast_length_days
     if sim.sector_duration_days is not None:
         payload["sector_duration_days"] = sim.sector_duration_days
-    if sim.requested_metric is not None:
-        payload["output"] = sim.requested_metric
-    else:
-        payload["output"] = "1y_sector_roi"
-    
+    requested = sim.requested_metrics if sim.requested_metrics else ['1y_sector_roi']
+    payload["output"] = requested if len(requested) > 1 else requested[0]
+
     response = requests.post(
         f"{MECHAFIL_SERVER_URL}/simulate",
         headers={"Accept": "application/json", "Content-Type": "application/json"},
@@ -262,30 +261,10 @@ def simulate(sim: SimulationInputs) -> dict:
 
     # Parse the JSON body into a dict
     data = response.json()
-    
+
     sim_output = data.get("simulation_output", {})
     if not sim_output:
         raise ValueError("No simulation_output found in response")
-    
-    # Assume only one key/value pair in simulation_output
-    output_name: str = next(iter(sim_output.keys()))
-    output_values: List[float] = sim_output[output_name]
-
-    # Automatically convert cumulative fields to daily averages so the LLM receives
-    # ready-to-use per-day values and never needs to diff raw cumulative arrays.
-    daily_note = ""
-    if output_name in CUMULATIVE_TO_DAILY and len(output_values) > 1:
-        daily_name = CUMULATIVE_TO_DAILY[output_name]
-        output_values = [
-            (output_values[i + 1] - output_values[i]) / 7
-            for i in range(len(output_values) - 1)
-        ]
-        output_name = daily_name
-        daily_note = (
-            f" The field '{daily_name}' contains pre-computed daily averages "
-            f"(consecutive Monday-sampled cumulative values differenced and divided by 7). "
-            f"Use these values directly — do NOT difference or divide again."
-        )
 
     input_data = data.get("input", {})
     if not input_data:
@@ -300,6 +279,29 @@ def simulate(sim: SimulationInputs) -> dict:
             return f"array(len={length}, first={first}, last={last})"
         return str(value)
 
+    # Process ALL returned metrics, applying cumulative→daily conversion where needed
+    result: Dict[str, Any] = {}
+    daily_notes: List[str] = []
+    actual_n: int = 0
+
+    for output_name, output_values in sim_output.items():
+        if not isinstance(output_values, list):
+            continue
+        if output_name in CUMULATIVE_TO_DAILY and len(output_values) > 1:
+            daily_name = CUMULATIVE_TO_DAILY[output_name]
+            output_values = [
+                (output_values[i + 1] - output_values[i]) / 7
+                for i in range(len(output_values) - 1)
+            ]
+            daily_notes.append(
+                f"'{daily_name}' contains pre-computed daily averages "
+                f"(cumulative values differenced and divided by 7); use directly."
+            )
+            output_name = daily_name
+        result[output_name] = output_values
+        actual_n = max(actual_n, len(output_values))
+
+    daily_note = (" " + " ".join(daily_notes)) if daily_notes else ""
     output_explanation_text = (
         "Results of a Filecoin simulation with the following input values: " +
         f"Raw byte power (rbp) onboarded: {_format_input(input_data.get('raw_byte_power'))}, " +
@@ -308,9 +310,6 @@ def simulate(sim: SimulationInputs) -> dict:
         daily_note
     )
 
-    # Compute actual n_entries from the output array (may differ from input_data["n_entries"]
-    # if a cumulative-to-daily conversion was applied, which reduces length by 1).
-    actual_n = len(output_values)
     sim_start = input_data.get("sim_start_date")
     timestep = input_data.get("timestep_days", 7)
     if sim_start and actual_n > 0:
@@ -319,14 +318,12 @@ def simulate(sim: SimulationInputs) -> dict:
     else:
         sim_end = input_data.get("sim_end_date")
 
-    return {
-        output_name: output_values,
-        "Explanation": output_explanation_text,
-        "sim_start_date": sim_start,
-        "sim_end_date": sim_end,
-        "timestep_days": timestep,
-        "n_entries": actual_n,
-    }
+    result["Explanation"] = output_explanation_text
+    result["sim_start_date"] = sim_start
+    result["sim_end_date"] = sim_end
+    result["timestep_days"] = timestep
+    result["n_entries"] = actual_n
+    return result
     
 
 @mcp.tool(annotations={"title": "Get Historical Filecoin Data"})
